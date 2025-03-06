@@ -17,12 +17,13 @@ def remove_black_borders(img):
 
     # 计算最大内接正方形
     square_size = max(w, h)
-    center_x = x + w//2
-    center_y = y + h//2
-    crop_x1 = max(0, center_x - square_size//2)
-    crop_y1 = max(0, center_y - square_size//2)
+    center_x = x + w // 2
+    center_y = y + h // 2
+    crop_x1 = max(0, center_x - square_size // 2)
+    crop_y1 = max(0, center_y - square_size // 2)
 
     return (crop_x1, crop_y1, square_size)
+
 
 def preprocess_pair(img_path, mask_path, target_size=512):
     """同步处理原图和血管标注图"""
@@ -38,8 +39,8 @@ def preprocess_pair(img_path, mask_path, target_size=512):
     x, y, size = crop_params
 
     # 执行相同裁剪
-    img_cropped = img[y:y+size, x:x+size]
-    mask_cropped = mask[y:y+size, x:x+size]
+    img_cropped = img[y:y + size, x:x + size]
+    mask_cropped = mask[y:y + size, x:x + size]
 
     # 统一缩放到目标尺寸
     img_resized = cv2.resize(img_cropped, (target_size, target_size))
@@ -82,6 +83,7 @@ def main():
 
         except Exception as e:
             print(f"\n处理 {filename} 时出错: {str(e)}")
+
 
 if __name__ == "__main__":
     main()

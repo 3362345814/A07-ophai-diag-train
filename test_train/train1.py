@@ -24,8 +24,8 @@ class Config:
     LR_START = 1e-4
     LR_END = 1e-6
     NUM_CLASSES = 8
-    DATA_PATH = "Archive"
-    SAVE_DIR = "saved_models"
+    DATA_PATH = "../Archive"
+    SAVE_DIR = "../saved_models"
     TEST_SIZE = 0.2
     SEED = 42
 

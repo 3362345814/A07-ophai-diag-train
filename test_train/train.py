@@ -273,7 +273,7 @@ class WeightedBinaryCrossentropy(keras.losses.Loss):
 # --------------------------
 if __name__ == "__main__":
     # 初始化组件
-    loader = EyePairDataLoader("data_test", "Archive/full_df.csv")
+    loader = EyePairDataLoader("../data_test", "Archive/full_df.csv")
     train_dataset = loader.get_dataset()
     val_dataset = loader.get_dataset(is_train=False)
     model = build_multi_label_model()
@@ -302,7 +302,7 @@ if __name__ == "__main__":
 
     # 回调函数
     checkpoint = ModelCheckpoint(
-        'saved_models/best_model.keras',
+        '../saved_models/best_model.keras',
         monitor='val_loss',
         save_best_only=True
     )

@@ -1,3 +1,5 @@
+import os
+
 import cv2
 import numpy as np
 from skimage.filters import frangi
@@ -140,3 +142,42 @@ def full_processing_pipeline(img_path, output_size=512):
         # 'annotated': annotated
     }
 
+# 在现有预处理函数后新增批量处理功能
+def batch_process_images(input_dir, output_dir):
+    """
+    批量处理眼底图像
+    :param input_dir: 输入目录路径 (包含*_left.jpg和*_right.jpg)
+    :param output_dir: 输出目录路径
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    # 获取所有待处理文件
+    image_files = [f for f in os.listdir(input_dir)
+                   if f.endswith(('_left.jpg', '_right.jpg'))]
+
+    print(f"发现 {len(image_files)} 张待处理图像...")
+
+    for filename in tqdm(image_files):
+        try:
+            # 执行完整处理流程
+            result = full_processing_pipeline(os.path.join(input_dir, filename))
+
+            # 保存处理后的图像
+            output_path = os.path.join(output_dir, filename)
+            cv2.imwrite(output_path,
+                        cv2.cvtColor(result['full_image'], cv2.COLOR_RGB2BGR))
+
+        except Exception as e:
+            print(f"处理 {filename} 时出错: {str(e)}")
+
+
+
+# 在文件末尾添加执行代码
+if __name__ == '__main__':
+    from tqdm import tqdm
+
+    # 使用示例（请根据实际情况修改路径）
+    batch_process_images(
+        input_dir="../Archive/preprocessed_images",
+        output_dir="../Archive/preprocessed_images1"
+    )

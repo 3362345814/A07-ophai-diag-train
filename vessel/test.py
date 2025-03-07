@@ -1,6 +1,7 @@
 import cv2
 import torch
 import numpy as np
+from tqdm import tqdm
 
 from vessel.preprocess import remove_black_borders
 from vessel_detection import VesselSegmentor  # 从训练代码中导入模型
@@ -31,25 +32,47 @@ def predict_vessels(model, img_path, device):
 
     # 后处理
     mask = (output.squeeze().cpu().numpy() > 0.5).astype(np.uint8) * 255
+
+    # 新增形态学操作（先膨胀后腐蚀）
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7,7))
+    mask = cv2.dilate(mask, kernel, iterations=1)  # 先膨胀连接断裂血管
+    mask = cv2.erode(mask, kernel, iterations=1)   # 再腐蚀消除细小噪声
+
     return mask
 
 
+# ... 前面的导入和函数保持不变 ...
+
 if __name__ == "__main__":
     # 配置参数
-    checkpoint_path = "best_vessel_model.pth"  # 训练保存的最佳模型
-    test_image_path = "../Archive/preprocessed_images/3_left.jpg"  # 待预测图片路径
-    output_path = "vessel_mask.png"  # 输出路径
+    checkpoint_path = "best_vessel_model.pth"
+    input_dir = "../Archive/preprocessed_images"
+    output_dir = "../Archive/mask"
 
-    # 初始化
+    # 创建输出目录
+    import os
+    os.makedirs(output_dir, exist_ok=True)
+
+    # 初始化（保持不变）
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     model = VesselSegmentor().to(device)
     model.load_state_dict(torch.load(checkpoint_path))
     model.eval()
 
-    # 执行预测
-    try:
-        mask = predict_vessels(model, test_image_path, device)
-        cv2.imwrite(output_path, mask)
-        print(f"预测完成，结果已保存至 {output_path}")
-    except Exception as e:
-        print(f"预测失败: {str(e)}")
+    # 获取所有待预测图片
+    image_files = [f for f in os.listdir(input_dir) if f.lower().endswith(('.jpg', '.png'))]
+
+    # 批量预测
+    for filename in tqdm(image_files):
+        try:
+            img_path = os.path.join(input_dir, filename)
+            # 生成输出路径
+            base_name = os.path.splitext(filename)[0]
+            output_path = os.path.join(output_dir, f"{base_name}_mask.jpg")
+
+            # 执行预测
+            mask = predict_vessels(model, img_path, device)
+            cv2.imwrite(output_path, mask)
+
+        except Exception as e:
+            print(f"处理 {filename} 失败: {str(e)}")

@@ -10,10 +10,10 @@ from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 # 配置参数
-TRAIN_LABELS = '../dataset/Diabetes/trainLabels.csv'
-TEST_LABELS = '../dataset/Diabetes/testLabels.csv'
-TRAIN_IMG_DIR = '../dataset/Diabetes/train'
-TEST_IMG_DIR = '../dataset/Diabetes/test'
+LABEL_FILE = '../dataset/Diabetes/trainLabels.csv'
+IMAGE_DIR = '../dataset/Diabetes/preprocess'
+TEST_SIZE = 0.2  # 验证集比例
+RANDOM_SEED = 42  # 随机种子
 
 
 def process_labels(df):
@@ -33,16 +33,16 @@ def process_labels(df):
     return pivoted[['id', 'label']]
 
 
-def load_dataset(label_path, img_dir):
+def load_dataset():
     """加载并验证数据集"""
-    raw_df = pd.read_csv(label_path)
+    raw_df = pd.read_csv(LABEL_FILE)
     processed_df = process_labels(raw_df)
 
     valid_data = []
     for _, row in processed_df.iterrows():
         img_id = row['id']
-        left_path = os.path.join(img_dir, f"{img_id}_left.jpeg")
-        right_path = os.path.join(img_dir, f"{img_id}_right.jpeg")
+        left_path = os.path.join(IMAGE_DIR, f"{img_id}_left.jpeg")
+        right_path = os.path.join(IMAGE_DIR, f"{img_id}_right.jpeg")
 
         if os.path.exists(left_path) and os.path.exists(right_path):
             valid_data.append({
@@ -55,9 +55,8 @@ def load_dataset(label_path, img_dir):
 
 # 自定义数据集类
 class DiabeticDataset(Dataset):
-    def __init__(self, df, img_dir, transform=None):
+    def __init__(self, df, transform=None):
         self.df = df
-        self.img_dir = img_dir
         self.transform = transform
         self.resize = transforms.Resize((256, 512))  # 统一调整尺寸
 
@@ -68,8 +67,8 @@ class DiabeticDataset(Dataset):
         item = self.df.iloc[idx]
 
         # 加载左右眼图像
-        left_img = Image.open(os.path.join(self.img_dir, f"{item['id']}_left.jpeg"))
-        right_img = Image.open(os.path.join(self.img_dir, f"{item['id']}_right.jpeg"))
+        left_img = Image.open(os.path.join(IMAGE_DIR, f"{item['id']}_left.jpeg"))
+        right_img = Image.open(os.path.join(IMAGE_DIR, f"{item['id']}_right.jpeg"))
 
         # 调整尺寸并拼接
         left_img = self.resize(left_img.convert('RGB'))
@@ -92,22 +91,41 @@ def main():
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    # 加载数据集
-    train_df = load_dataset(TRAIN_LABELS, TRAIN_IMG_DIR)
-    test_df = load_dataset(TEST_LABELS, TEST_IMG_DIR)
+    # 加载并分割数据集
+    full_df = load_dataset()
+    train_df, val_df = train_test_split(
+        full_df,
+        test_size=TEST_SIZE,
+        stratify=full_df['label'],
+        random_state=RANDOM_SEED
+    )
 
+    print(f"总样本数: {len(full_df)}")
     print(f"训练集样本数: {len(train_df)}")
-    print(f"测试集样本数: {len(test_df)}")
+    print(f"验证集样本数: {len(val_df)}")
     print("训练集类别分布:\n", train_df['label'].value_counts())
-    print("测试集类别分布:\n", test_df['label'].value_counts())
+    print("验证集类别分布:\n", val_df['label'].value_counts())
 
     # 创建数据集
-    train_dataset = DiabeticDataset(train_df, TRAIN_IMG_DIR, transform)
-    test_dataset = DiabeticDataset(test_df, TEST_IMG_DIR, transform)
+    train_dataset = DiabeticDataset(train_df, transform)
+    val_dataset = DiabeticDataset(val_df, transform)
 
     # 数据加载器
-    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=4, pin_memory=True)
-    test_loader = DataLoader(test_dataset, batch_size=8, shuffle=False, num_workers=4, pin_memory=True)
+    BATCH_SIZE = 8
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True
+    )
 
     # 初始化模型
     model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
@@ -146,7 +164,7 @@ def main():
         val_loss = 0
         correct = 0
         with torch.no_grad():
-            for inputs, labels in test_loader:
+            for inputs, labels in val_loader:
                 inputs = inputs.to(device)
                 labels = labels.to(device)
 
@@ -159,8 +177,8 @@ def main():
 
         # 计算指标
         train_loss /= len(train_loader.dataset)
-        val_loss /= len(test_loader.dataset)
-        val_acc = correct / len(test_loader.dataset)
+        val_loss /= len(val_loader.dataset)
+        val_acc = correct / len(val_loader.dataset)
 
         # 保存最佳模型
         if val_acc > best_acc:
@@ -168,7 +186,7 @@ def main():
             torch.save(model.state_dict(), 'diabetic_best.pth')
 
         print(f"Epoch {epoch + 1:02}")
-        print(f"Train Loss: {train_loss:.4f} | Test Loss: {val_loss:.4f} | Acc: {val_acc:.4f}")
+        print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Acc: {val_acc:.4f}")
 
 
 if __name__ == '__main__':

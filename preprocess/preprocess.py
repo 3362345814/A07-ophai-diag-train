@@ -18,7 +18,6 @@ def remove_black_borders(img):
             top = bottom = (w - h) // 2
             left = right = 0
 
-
         # 添加黑色边框
         padded = cv2.copyMakeBorder(img,
                                     top, bottom,
@@ -43,12 +42,12 @@ def remove_black_borders(img):
 
     # 计算最大内接正方形（保持眼球完整）
     square_size = max(w, h)
-    center_x = x + w//2
-    center_y = y + h//2
+    center_x = x + w // 2
+    center_y = y + h // 2
 
     # 计算裁剪坐标（确保不越界）
-    crop_x1 = max(0, center_x - square_size//2)
-    crop_y1 = max(0, center_y - square_size//2)
+    crop_x1 = max(0, center_x - square_size // 2)
+    crop_y1 = max(0, center_y - square_size // 2)
     crop_x2 = min(img.shape[1], crop_x1 + square_size)
     crop_y2 = min(img.shape[0], crop_y1 + square_size)
 
@@ -57,7 +56,8 @@ def remove_black_borders(img):
 
     return cropped
 
-def adaptive_contrast_enhancement(img, clip_limit=3.0, grid_size=(8,8)):
+
+def adaptive_contrast_enhancement(img, clip_limit=3.0, grid_size=(8, 8)):
     """
     使用CLAHE算法增强对比度
     :param img: 图片
@@ -99,15 +99,15 @@ def gray_world_normalization(img):
     """
     灰度世界颜色校正算法
     """
-    avg_r = np.mean(img[:,:,0])
-    avg_g = np.mean(img[:,:,1])
-    avg_b = np.mean(img[:,:,2])
+    avg_r = np.mean(img[:, :, 0])
+    avg_g = np.mean(img[:, :, 1])
+    avg_b = np.mean(img[:, :, 2])
     avg_gray = (avg_r + avg_g + avg_b) / 3.0
 
     img_normalized = np.zeros_like(img, dtype=np.float32)
-    img_normalized[:,:,0] = img[:,:,0] * (avg_gray / avg_r)
-    img_normalized[:,:,1] = img[:,:,1] * (avg_gray / avg_g)
-    img_normalized[:,:,2] = img[:,:,2] * (avg_gray / avg_b)
+    img_normalized[:, :, 0] = img[:, :, 0] * (avg_gray / avg_r)
+    img_normalized[:, :, 1] = img[:, :, 1] * (avg_gray / avg_g)
+    img_normalized[:, :, 2] = img[:, :, 2] * (avg_gray / avg_b)
 
     return cv2.normalize(img_normalized, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
 
@@ -117,13 +117,13 @@ def full_processing_pipeline(img_path, output_size=512):
     img = cv2.imread(img_path)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-    # 2. 图像增强
+    # # 2. 图像增强
     img = remove_black_borders(img)
-    img = adaptive_contrast_enhancement(img)
-    img = vessel_enhancement(img)
-
-    # 3. 色彩标准化
-    img = gray_world_normalization(img)
+    # img = adaptive_contrast_enhancement(img)
+    # img = vessel_enhancement(img)
+    #
+    # # 3. 色彩标准化
+    # img = gray_world_normalization(img)
 
     # 4. ROI处理
     # disc_roi, disc_coords = optic_disc_segmentation(img)
@@ -142,6 +142,7 @@ def full_processing_pipeline(img_path, output_size=512):
         # 'annotated': annotated
     }
 
+
 # 在现有预处理函数后新增批量处理功能
 def batch_process_images(input_dir, output_dir):
     """
@@ -153,7 +154,7 @@ def batch_process_images(input_dir, output_dir):
 
     # 获取所有待处理文件
     image_files = [f for f in os.listdir(input_dir)
-                   if f.endswith(('_left.jpg', '_right.jpg'))]
+                   if f.endswith(('_left.jpeg', '_right.jpeg'))]
 
     print(f"发现 {len(image_files)} 张待处理图像...")
 
@@ -171,13 +172,12 @@ def batch_process_images(input_dir, output_dir):
             print(f"处理 {filename} 时出错: {str(e)}")
 
 
-
 # 在文件末尾添加执行代码
 if __name__ == '__main__':
     from tqdm import tqdm
 
     # 使用示例（请根据实际情况修改路径）
     batch_process_images(
-        input_dir="../dataset/Archive/preprocessed_images",
-        output_dir="../dataset/Archive/preprocessed_images1"
+        input_dir="../dataset/Diabetes/train",
+        output_dir="../dataset/Diabetes/preprocess"
     )

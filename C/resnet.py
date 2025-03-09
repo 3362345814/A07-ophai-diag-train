@@ -75,8 +75,8 @@ def main():
     train_dataset = EyeDataset(train_df, transform=transform)
     val_dataset = EyeDataset(val_df, transform=transform)
 
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=4)
-    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=4)
+    val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, num_workers=4)
 
     # 初始化模型
     model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V1)

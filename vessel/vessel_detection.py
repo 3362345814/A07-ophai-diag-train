@@ -95,7 +95,7 @@ def main():
 
     # 创建完整数据集
     full_dataset = VesselDataset(
-        root_dir="../DRHAGIS",
+        root_dir="../dataset/vessel_mask",
         transform=None  # 原始数据集不应用增强
     )
 

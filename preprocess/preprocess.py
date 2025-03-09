@@ -178,6 +178,6 @@ if __name__ == '__main__':
 
     # 使用示例（请根据实际情况修改路径）
     batch_process_images(
-        input_dir="../Archive/preprocessed_images",
-        output_dir="../Archive/preprocessed_images1"
+        input_dir="../dataset/Archive/preprocessed_images",
+        output_dir="../dataset/Archive/preprocessed_images1"
     )

@@ -46,8 +46,8 @@ def predict_vessels(model, img_path, device):
 if __name__ == "__main__":
     # 配置参数
     checkpoint_path = "best_vessel_model.pth"
-    input_dir = "../Archive/preprocessed_images"
-    output_dir = "../Archive/mask"
+    input_dir = "../dataset/Archive/preprocessed_images"
+    output_dir = "../dataset/Archive/mask"
 
     # 创建输出目录
     import os

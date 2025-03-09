@@ -51,11 +51,11 @@ def preprocess_pair(img_path, mask_path, target_size=512):
 
 def main():
     # 原始路径和新路径配置
-    original_img_dir = "../DRHAGIS/Fundus_Images"
-    original_mask_dir = "../DRHAGIS/Manual_Segmentations"
+    original_img_dir = "../dataset/vessel_mask/Fundus_Images"
+    original_mask_dir = "../dataset/vessel_mask/Manual_Segmentations"
 
-    preprocessed_img_dir = "../DRHAGIS/Fundus_Images_Preprocess"
-    preprocessed_mask_dir = "../DRHAGIS/Manual_Segmentations_Preprocess"
+    preprocessed_img_dir = "../dataset/vessel_mask/Fundus_Images_Preprocess"
+    preprocessed_mask_dir = "../dataset/vessel_mask/Manual_Segmentations_Preprocess"
 
     # 创建输出目录
     os.makedirs(preprocessed_img_dir, exist_ok=True)

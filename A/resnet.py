@@ -16,12 +16,13 @@ IMAGE_DIR = '../dataset/AMD/OriginalImages'
 RANDOM_SEED = 42
 TEST_SIZE = 0.2
 
+
 class DiabeticDataset(Dataset):
     def __init__(self, df, image_dir, transform=None):
         self.df = df.reset_index(drop=True)
         self.image_dir = image_dir
         self.transform = transform
-        self.resize = transforms.Resize((256, 512))
+        self.resize = transforms.Resize((256, 512))  # 调整单眼图片尺寸
 
         # 预处理索引
         self.healthy_indices = []
@@ -63,6 +64,7 @@ class DiabeticDataset(Dataset):
             combined = self.transform(combined)
 
         return combined, current_label
+
 
 def main():
     # 数据预处理
@@ -108,13 +110,9 @@ def main():
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)
 
-    # 早停参数
-    patience = 5
-    no_improve = 0
-    best_acc = -float('inf')
-
     # 训练循环
-    for epoch in range(50):  # 设置较大的epoch数，由早停控制实际训练轮次
+    best_acc = 0
+    for epoch in range(20):
         model.train()
         train_loss = 0
         for inputs, labels in tqdm(train_loader, desc=f'Epoch {epoch + 1}'):
@@ -147,24 +145,13 @@ def main():
         val_loss = val_loss / len(val_dataset)
         val_acc = correct / len(val_dataset)
 
-        # 早停逻辑
+        # 保存最佳模型
         if val_acc > best_acc:
             best_acc = val_acc
             torch.save(model.state_dict(), 'amd_best.pth')
-            no_improve = 0
-            print(f"发现新的最佳准确率: {val_acc:.4f}")
-        else:
-            no_improve += 1
-            print(f"连续 {no_improve}/{patience} 轮未提升")
 
-        # 打印信息
         print(f"Epoch {epoch + 1:02}")
         print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.4f}\n")
-
-        # 检查早停条件
-        if no_improve >= patience:
-            print(f"早停触发：连续 {patience} 轮验证集准确率未提升")
-            break
 
 
 if __name__ == '__main__':

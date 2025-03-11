@@ -15,6 +15,7 @@ TRAIN_LABEL_FILE = '../dataset/AMD/label.csv'
 IMAGE_DIR = '../dataset/AMD/OriginalImages'
 RANDOM_SEED = 42
 TEST_SIZE = 0.2
+PATIENCE = 5
 
 
 class DiabeticDataset(Dataset):
@@ -76,6 +77,7 @@ def main():
 
     # 加载数据
     train_df = pd.read_csv(TRAIN_LABEL_FILE)
+    train_df['AMD'] = train_df['AMD'].apply(lambda x: 1 if x != 0 else 0)
 
     # 分割训练验证集
     train_df, val_df = train_test_split(
@@ -86,6 +88,9 @@ def main():
     )
 
     print(f"训练样本: {len(train_df)}, 验证样本: {len(val_df)}")
+    amd_0 = len(train_df[train_df['AMD'] == 0])
+    amd_1 = len(train_df[train_df['AMD'] == 1])
+
 
     # 创建数据集
     train_dataset = DiabeticDataset(train_df, IMAGE_DIR, transform)
@@ -107,8 +112,12 @@ def main():
     device = torch.device(
         'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
     model = model.to(device)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)
+    class_weight = torch.tensor([amd_0 / amd_1, 1]).to(device)
+    criterion = nn.CrossEntropyLoss(weight=class_weight)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-3)
+
+
+    early_stop_counter = 0
 
     # 训练循环
     best_acc = 0
@@ -149,6 +158,11 @@ def main():
         if val_acc > best_acc:
             best_acc = val_acc
             torch.save(model.state_dict(), 'amd_best.pth')
+        else:
+            early_stop_counter += 1
+        if early_stop_counter >= PATIENCE:
+            print("Early stopping triggered")
+            break
 
         print(f"Epoch {epoch + 1:02}")
         print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.4f}\n")

@@ -1,6 +1,5 @@
 import pandas as pd
 import os
-import random
 from PIL import Image
 import torch
 import torch.nn as nn
@@ -11,114 +10,134 @@ from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 # 配置参数
-TRAIN_LABEL_FILE = '../dataset/AMD/label.csv'
-IMAGE_DIR = '../dataset/AMD/OriginalImages'
-RANDOM_SEED = 42
-TEST_SIZE = 0.2
+LABEL_FILE = '../dataset/Archive/full_df.csv'
+IMAGE_DIR = '../dataset/Archive/preprocessed_images'
+RANDOM_SEED = 42  # 随机种子
+TEST_SIZE = 0.2  # 验证集比例
 
+
+def process_labels(df):
+    """处理标签生成二分类（0=健康，1=患病）"""
+
+    return df[['ID', 'D']]
+
+
+def load_dataset():
+    """加载并验证数据集"""
+    raw_df = pd.read_csv(LABEL_FILE)
+    processed_df = process_labels(raw_df)
+
+    valid_data = []
+    for _, row in processed_df.iterrows():
+        img_id = row['ID']
+        left_path = os.path.join(IMAGE_DIR, f"{img_id}_left.jpg")
+        right_path = os.path.join(IMAGE_DIR, f"{img_id}_right.jpg")
+
+        if os.path.exists(left_path) and os.path.exists(right_path):
+            valid_data.append({
+                'id': img_id,
+                'label': row['D']
+            })
+    return pd.DataFrame(valid_data)
+
+
+# 自定义数据集类
 class DiabeticDataset(Dataset):
-    def __init__(self, df, image_dir, transform=None):
-        self.df = df.reset_index(drop=True)
-        self.image_dir = image_dir
+    def __init__(self, df, transform=None):
+        self.df = df
         self.transform = transform
-        self.resize = transforms.Resize((256, 512))
-
-        # 预处理索引
-        self.healthy_indices = []
-        self.all_indices = []
-        for idx in range(len(df)):
-            if df.iloc[idx]['AMD'] == 0:
-                self.healthy_indices.append(idx)
-            self.all_indices.append(idx)
+        self.resize = transforms.Resize((256, 512))  # 统一调整尺寸
 
     def __len__(self):
         return len(self.df)
 
     def __getitem__(self, idx):
-        # 获取当前样本
-        current_row = self.df.iloc[idx]
-        current_img = Image.open(os.path.join(self.image_dir, current_row['fnames'])).convert('RGB')
-        current_img = self.resize(current_img)
-        current_label = current_row['AMD']
+        item = self.df.iloc[idx]
 
-        # 选择配对样本
-        if current_label == 1:
-            candidates = [i for i in self.all_indices if i != idx]
-        else:
-            candidates = [i for i in self.healthy_indices if i != idx]
+        # 加载左右眼图像
+        left_img = Image.open(os.path.join(IMAGE_DIR, f"{item['id']}_left.jpg"))
+        right_img = Image.open(os.path.join(IMAGE_DIR, f"{item['id']}_right.jpg"))
 
-        pair_idx = random.choice(candidates) if candidates else idx
+        # 调整尺寸并拼接
+        left_img = self.resize(left_img.convert('RGB'))
+        right_img = self.resize(right_img.convert('RGB'))
 
-        # 加载配对样本
-        pair_row = self.df.iloc[pair_idx]
-        pair_img = Image.open(os.path.join(self.image_dir, pair_row['fnames'])).convert('RGB')
-        pair_img = self.resize(pair_img)
-
-        # 拼接双眼图像
         combined = Image.new('RGB', (512, 512))
-        combined.paste(current_img, (0, 0))  # 左眼
-        combined.paste(pair_img, (256, 0))  # 右眼
+        combined.paste(left_img, (0, 0))
+        combined.paste(right_img, (256, 0))
 
         if self.transform:
             combined = self.transform(combined)
 
-        return combined, current_label
+        return combined, item['label']
+
 
 def main():
     # 数据预处理
     transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                             std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    # 加载数据
-    train_df = pd.read_csv(TRAIN_LABEL_FILE)
-
-    # 分割训练验证集
+    # 加载并分割数据集
+    full_df = load_dataset()
     train_df, val_df = train_test_split(
-        train_df,
+        full_df,
         test_size=TEST_SIZE,
-        stratify=train_df['AMD'],
+        stratify=full_df['label'],
         random_state=RANDOM_SEED
     )
 
-    print(f"训练样本: {len(train_df)}, 验证样本: {len(val_df)}")
+    print(f"总样本数: {len(full_df)}")
+    print(f"训练集样本数: {len(train_df)}")
+    print(f"验证集样本数: {len(val_df)}")
+    print("训练集类别分布:\n", train_df['label'].value_counts())
+    print("验证集类别分布:\n", val_df['label'].value_counts())
 
     # 创建数据集
-    train_dataset = DiabeticDataset(train_df, IMAGE_DIR, transform)
-    val_dataset = DiabeticDataset(val_df, IMAGE_DIR, transform)
+    train_dataset = DiabeticDataset(train_df, transform)
+    val_dataset = DiabeticDataset(val_df, transform)
 
     # 数据加载器
     BATCH_SIZE = 8
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True
+    )
 
     # 初始化模型
     model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
+    num_features = model.fc.in_features
     model.fc = nn.Sequential(
         nn.Dropout(0.5),
-        nn.Linear(model.fc.in_features, 2)
+        nn.Linear(num_features, 2)  # 二分类输出
     )
 
     # 训练配置
-    device = torch.device(
-        'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
+    device = torch.device('mps')
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)
 
-    # 早停参数
-    patience = 5
-    no_improve = 0
-    best_acc = -float('inf')
-
     # 训练循环
-    for epoch in range(50):  # 设置较大的epoch数，由早停控制实际训练轮次
+    best_acc = 0
+    for epoch in range(20):
+        # 训练阶段
         model.train()
         train_loss = 0
         for inputs, labels in tqdm(train_loader, desc=f'Epoch {epoch + 1}'):
-            inputs, labels = inputs.to(device), labels.to(device)
+            inputs = inputs.to(device)
+            labels = labels.to(device)
 
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -128,12 +147,14 @@ def main():
 
             train_loss += loss.item() * inputs.size(0)
 
-        # 验证
+        # 验证阶段
         model.eval()
-        val_loss, correct = 0, 0
+        val_loss = 0
+        correct = 0
         with torch.no_grad():
             for inputs, labels in val_loader:
-                inputs, labels = inputs.to(device), labels.to(device)
+                inputs = inputs.to(device)
+                labels = labels.to(device)
 
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
@@ -143,28 +164,17 @@ def main():
                 correct += (preds == labels).sum().item()
 
         # 计算指标
-        train_loss = train_loss / len(train_dataset)
-        val_loss = val_loss / len(val_dataset)
-        val_acc = correct / len(val_dataset)
+        train_loss /= len(train_loader.dataset)
+        val_loss /= len(val_loader.dataset)
+        val_acc = correct / len(val_loader.dataset)
 
-        # 早停逻辑
+        # 保存最佳模型
         if val_acc > best_acc:
             best_acc = val_acc
-            torch.save(model.state_dict(), 'amd_best.pth')
-            no_improve = 0
-            print(f"发现新的最佳准确率: {val_acc:.4f}")
-        else:
-            no_improve += 1
-            print(f"连续 {no_improve}/{patience} 轮未提升")
+            torch.save(model.state_dict(), 'diabetic_best.pth')
 
-        # 打印信息
         print(f"Epoch {epoch + 1:02}")
-        print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.4f}\n")
-
-        # 检查早停条件
-        if no_improve >= patience:
-            print(f"早停触发：连续 {patience} 轮验证集准确率未提升")
-            break
+        print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Acc: {val_acc:.4f}")
 
 
 if __name__ == '__main__':

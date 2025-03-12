@@ -1,3 +1,5 @@
+import cv2
+import numpy as np
 import pandas as pd
 import os
 from PIL import Image
@@ -17,6 +19,70 @@ IMAGE_DIR = ROOT_DIR / 'dataset/Archive/optic_disk'
 RANDOM_SEED = 42  # 随机种子
 TEST_SIZE = 0.2  # 验证集比例
 PATIENCE = 5  # 早停计数器
+
+
+def remove_black_borders(pil_img):
+    def smart_retina_preprocessing(cv_img):
+        """处理视网膜图像预处理（使用OpenCV）"""
+        # 转换为numpy数组后尺寸访问方式
+        h, w = cv_img.shape[:2]
+
+        # 计算填充尺寸
+        if h > w:
+            top = bottom = 0
+            left = right = (h - w) // 2
+        else:
+            top = bottom = (w - h) // 2
+            left = right = 0
+
+        # 添加黑色边框
+        padded = cv2.copyMakeBorder(cv_img,
+                                    top, bottom,
+                                    left, right,
+                                    cv2.BORDER_CONSTANT,
+                                    value=[0, 0, 0])
+        return padded
+
+    # 将PIL Image转换为OpenCV格式（BGR）
+    cv_img = np.array(pil_img)
+    cv_img = cv2.cvtColor(cv_img, cv2.COLOR_RGB2BGR)
+
+    # 执行预处理
+    cv_img = smart_retina_preprocessing(cv_img)
+
+    # 转换为灰度图并进行阈值处理
+    gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
+    _, thresh = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
+
+    # 查找轮廓并找到最大轮廓
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return pil_img  # 如果没有找到轮廓返回原图
+    cnt = max(contours, key=cv2.contourArea)
+
+    # 获取边界矩形
+    x, y, w, h = cv2.boundingRect(cnt)
+
+    # 计算最大内接正方形
+    square_size = max(w, h)
+    if square_size < 10:
+        return pil_img
+
+    center_x = x + w // 2
+    center_y = y + h // 2
+
+    # 计算裁剪坐标
+    crop_x1 = max(0, center_x - square_size // 2)
+    crop_y1 = max(0, center_y - square_size // 2)
+    crop_x2 = min(cv_img.shape[1], crop_x1 + square_size)
+    crop_y2 = min(cv_img.shape[0], crop_y1 + square_size)
+
+    # 执行裁剪
+    cropped = cv_img[crop_y1:crop_y2, crop_x1:crop_x2]
+
+    # 转换回PIL Image（需要转换颜色空间）
+    cropped_rgb = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
+    return Image.fromarray(cropped_rgb)
 
 
 def process_labels(df):
@@ -60,6 +126,9 @@ class DiabeticDataset(Dataset):
         # 加载左右眼图像
         left_img = Image.open(os.path.join(IMAGE_DIR, f"{item['id']}_left.jpg"))
         right_img = Image.open(os.path.join(IMAGE_DIR, f"{item['id']}_right.jpg"))
+
+        left_img = remove_black_borders(left_img)
+        right_img = remove_black_borders(right_img)
 
         # 调整尺寸并拼接
         left_img = self.resize(left_img.convert('RGB'))
@@ -175,7 +244,7 @@ def main():
         # 保存最佳模型
         if val_acc > best_acc:
             best_acc = val_acc
-            torch.save(model.state_dict(), 'diabetic_best.pth')
+            torch.save(model.state_dict(), 'G_best.pth')
         else:
             early_stop_counter += 1
         if early_stop_counter >= PATIENCE:

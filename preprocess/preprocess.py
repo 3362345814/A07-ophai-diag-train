@@ -4,6 +4,8 @@ import cv2
 import numpy as np
 from skimage.filters import frangi
 
+from config import ROOT_DIR
+
 
 def remove_black_borders(img):
     def smart_retina_preprocessing(img):
@@ -178,6 +180,6 @@ if __name__ == '__main__':
 
     # 使用示例（请根据实际情况修改路径）
     batch_process_images(
-        input_dir="../dataset/Diabetes/train",
-        output_dir="../dataset/Diabetes/preprocess"
+        input_dir=ROOT_DIR / "dataset/Diabetes/train",
+        output_dir=ROOT_DIR / "dataset/Diabetes/preprocess"
     )

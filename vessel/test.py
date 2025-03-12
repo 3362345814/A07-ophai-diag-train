@@ -47,7 +47,7 @@ if __name__ == "__main__":
     # 配置参数
     checkpoint_path = "best_vessel_model.pth"
     input_dir = "../dataset/Archive/preprocessed_images"
-    output_dir = "../dataset/Archive/mask"
+    output_dir = "../dataset/Archive/vessel_mask"
 
     # 创建输出目录
     import os

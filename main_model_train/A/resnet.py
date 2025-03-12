@@ -9,10 +9,11 @@ import torchvision.transforms as transforms
 from torchvision.models import resnet50, ResNet50_Weights
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
+from config import ROOT_DIR
 
 # 配置参数
-TRAIN_LABEL_FILE = '../dataset/AMD/label.csv'
-IMAGE_DIR = '../dataset/AMD/OriginalImages'
+TRAIN_LABEL_FILE = ROOT_DIR / 'dataset/AMD/label.csv'
+IMAGE_DIR = ROOT_DIR / 'dataset/AMD/OriginalImages'
 RANDOM_SEED = 42
 TEST_SIZE = 0.2
 PATIENCE = 5

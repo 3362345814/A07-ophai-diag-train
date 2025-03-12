@@ -9,17 +9,20 @@ from torchvision.models import resnet50, ResNet50_Weights
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
+from config import ROOT_DIR
+
 # 配置参数
-LABEL_FILE = '../dataset/Archive/full_df.csv'
-IMAGE_DIR = '../dataset/Archive/preprocessed_images'
+LABEL_FILE = ROOT_DIR / 'dataset/Archive/full_df.csv'
+IMAGE_DIR = ROOT_DIR / 'dataset/Archive/optic_disk'
 RANDOM_SEED = 42  # 随机种子
 TEST_SIZE = 0.2  # 验证集比例
+PATIENCE = 5  # 早停计数器
 
 
 def process_labels(df):
     """处理标签生成二分类（0=健康，1=患病）"""
 
-    return df[['ID', 'D']]
+    return df[['ID', 'G']]
 
 
 def load_dataset():
@@ -36,7 +39,7 @@ def load_dataset():
         if os.path.exists(left_path) and os.path.exists(right_path):
             valid_data.append({
                 'id': img_id,
-                'label': row['D']
+                'label': row['G']
             })
     return pd.DataFrame(valid_data)
 
@@ -131,6 +134,7 @@ def main():
 
     # 训练循环
     best_acc = 0
+    early_stop_counter = 0
     for epoch in range(20):
         # 训练阶段
         model.train()
@@ -172,6 +176,11 @@ def main():
         if val_acc > best_acc:
             best_acc = val_acc
             torch.save(model.state_dict(), 'diabetic_best.pth')
+        else:
+            early_stop_counter += 1
+        if early_stop_counter >= PATIENCE:
+            print("Early stopping triggered")
+            break
 
         print(f"Epoch {epoch + 1:02}")
         print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Acc: {val_acc:.4f}")

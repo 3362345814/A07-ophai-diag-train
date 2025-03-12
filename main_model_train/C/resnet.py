@@ -9,14 +9,16 @@ from torchvision.models import resnet50, ResNet50_Weights
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
+from config import ROOT_DIR
+
 # 读取CSV文件并过滤有效样本
-df = pd.read_csv('../dataset/Archive/full_df.csv')
+df = pd.read_csv(ROOT_DIR / 'dataset/Archive/full_df.csv')
 valid_data = []
 
 for _, row in df.iterrows():
     id = row['ID']
-    left_path = f'../dataset/Archive/mask/{id}_left_mask.jpg'
-    right_path = f'../dataset/Archive/mask/{id}_right_mask.jpg'
+    left_path = ROOT_DIR / f'dataset/Archive/vessel_mask/{id}_left_mask.jpg'
+    right_path = ROOT_DIR / f'dataset/Archive/vessel_mask/{id}_right_mask.jpg'
 
     if os.path.exists(left_path) and os.path.exists(right_path):
         valid_data.append({
@@ -40,8 +42,8 @@ class EyeDataset(Dataset):
         item = self.df.iloc[idx]
 
         # 加载左右眼图像
-        left_img = Image.open(f'../dataset/Archive/mask/{item["id"]}_left_mask.jpg')
-        right_img = Image.open(f'../dataset/Archive/mask/{item["id"]}_right_mask.jpg')
+        left_img = Image.open(ROOT_DIR / f'dataset/Archive/vessel_mask/{item["id"]}_left_mask.jpg')
+        right_img = Image.open(ROOT_DIR / f'dataset/Archive/vessel_mask/{item["id"]}_right_mask.jpg')
 
         # 调整尺寸
         resize = transforms.Resize((256, 512))

@@ -10,10 +10,12 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 from tqdm import tqdm
 
+from config import ROOT_DIR
+
 # 配置参数
 CLASS_NAMES = ['N', 'D', 'G', 'C', 'A', 'H', 'M', 'O']  # 按实际列名顺序
 ID_COLUMN = 'ID'  # 患者ID列名
-IMAGE_DIR = '../dataset/Archive/preprocessed_images'
+IMAGE_DIR = ROOT_DIR / 'dataset/Archive/preprocessed_images'
 
 
 # 标签处理函数
@@ -78,7 +80,7 @@ val_transform = transforms.Compose([
 ])
 
 # 加载并预处理数据
-df = pd.read_csv('../dataset/Archive/full_df.csv')
+df = pd.read_csv('../../dataset/Archive/full_df.csv')
 
 # 过滤有效样本
 valid_data = []

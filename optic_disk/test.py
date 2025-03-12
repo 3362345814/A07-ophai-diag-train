@@ -5,6 +5,8 @@ from albumentations import Compose, Resize
 import torch.nn as nn
 import segmentation_models_pytorch as smp
 
+from config import ROOT_DIR
+
 
 class OpticDiscSegmentor(nn.Module):
     def __init__(self):
@@ -76,13 +78,12 @@ def predict_and_save(image_path, model_path, output_path, device='auto'):
 
     # 保存结果
     cv2.imwrite(output_path, resized_mask)
-    print(f"预测结果已保存至: {output_path}")
 
 
 if __name__ == "__main__":
     # 使用示例
     predict_and_save(
-        image_path="../dataset/optic_disk/PALM-Testing400-Images/T0012.jpg",  # 输入图像路径
+        image_path=ROOT_DIR / "dataset/optic_disk/PALM-Testing400-Images/T0012.jpg",  # 输入图像路径
         model_path="best_disc_model.pth",  # 训练好的模型路径
         output_path="predicted_mask.jpg"  # 输出掩码路径
     )

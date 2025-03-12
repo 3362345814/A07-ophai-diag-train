@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 # -------------------- 配置参数 --------------------
 DATA_ROOT = "../Archive/preprocessed_images"
-CSV_PATH = "../C/dataset/full_df.csv"
+CSV_PATH = "../main_model_train/C/dataset/full_df.csv"
 IMAGE_SIZE = 512
 BATCH_SIZE = 4
 NUM_EPOCHS = 50

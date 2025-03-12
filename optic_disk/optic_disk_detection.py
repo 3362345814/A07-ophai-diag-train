@@ -8,6 +8,8 @@ import albumentations as A
 import segmentation_models_pytorch as smp
 from tqdm import tqdm
 
+from config import ROOT_DIR
+
 
 class OpticDiscDataset(Dataset):
     def __init__(self, root_dir, img_size=512, transform=None):
@@ -98,7 +100,7 @@ def main():
 
     # 创建完整数据集
     full_dataset = OpticDiscDataset(
-        root_dir="../dataset/optic_disk/Train",
+        root_dir=ROOT_DIR / "dataset/optic_disk/Train",
         transform=None
     )
 

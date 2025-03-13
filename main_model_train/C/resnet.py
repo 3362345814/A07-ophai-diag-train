@@ -46,7 +46,7 @@ class EyeDataset(Dataset):
         right_img = Image.open(ROOT_DIR / f'dataset/Archive/vessel_mask/{item["id"]}_right_mask.jpg')
 
         # 调整尺寸
-        resize = transforms.Resize((256, 512))
+        resize = transforms.Resize((512, 256))
         left_img = resize(left_img)
         right_img = resize(right_img)
 
@@ -139,7 +139,7 @@ def main():
         # 保存最佳模型
         if val_acc > best_val_acc:
             best_val_acc = val_acc
-            torch.save(model.state_dict(), 'best_model.pth')
+            torch.save(model.state_dict(), 'C_best.pth')
 
     print(f'Best Validation Accuracy: {best_val_acc:.4f}')
 

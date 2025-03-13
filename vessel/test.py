@@ -3,6 +3,7 @@ import torch
 import numpy as np
 from tqdm import tqdm
 
+from config import ROOT_DIR
 from vessel.preprocess import remove_black_borders
 from vessel_detection import VesselSegmentor  # 从训练代码中导入模型
 
@@ -46,15 +47,15 @@ def predict_vessels(model, img_path, device):
 if __name__ == "__main__":
     # 配置参数
     checkpoint_path = "best_vessel_model.pth"
-    input_dir = "../dataset/Archive/preprocessed_images"
-    output_dir = "../dataset/Archive/vessel_mask"
+    input_dir = ROOT_DIR / "dataset/AMD/OriginalImages"
+    output_dir = ROOT_DIR / "dataset/AMD/vessel_mask"
 
     # 创建输出目录
     import os
     os.makedirs(output_dir, exist_ok=True)
 
     # 初始化（保持不变）
-    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "mps")
     model = VesselSegmentor().to(device)
     model.load_state_dict(torch.load(checkpoint_path))
     model.eval()
@@ -67,8 +68,8 @@ if __name__ == "__main__":
         try:
             img_path = os.path.join(input_dir, filename)
             # 生成输出路径
-            base_name = os.path.splitext(filename)[0]
-            output_path = os.path.join(output_dir, f"{base_name}_mask.jpg")
+            base_name, ext = os.path.splitext(filename)
+            output_path = os.path.join(output_dir, f"{base_name}_mask{ext}")
 
             # 执行预测
             mask = predict_vessels(model, img_path, device)

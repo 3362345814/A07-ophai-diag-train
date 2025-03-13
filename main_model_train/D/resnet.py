@@ -1,3 +1,5 @@
+import cv2
+import numpy as np
 import pandas as pd
 import os
 from PIL import Image
@@ -48,7 +50,7 @@ class DiabeticDataset(Dataset):
     def __init__(self, df, transform=None):
         self.df = df
         self.transform = transform
-        self.resize = transforms.Resize((256, 512))  # 统一调整尺寸
+        self.resize = transforms.Resize((512, 256))  # 统一调整尺寸
 
     def __len__(self):
         return len(self.df)
@@ -173,7 +175,7 @@ def main():
         # 保存最佳模型
         if val_acc > best_acc:
             best_acc = val_acc
-            torch.save(model.state_dict(), 'diabetic_best.pth')
+            torch.save(model.state_dict(), 'D_best.pth')
 
         print(f"Epoch {epoch + 1:02}")
         print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Acc: {val_acc:.4f}")

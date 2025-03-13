@@ -26,8 +26,7 @@ class OpticDiscSegmentor(nn.Module):
 def predict_and_save(image_path, model_path, output_path, device='auto'):
     # 设备设置
     if device == 'auto':
-        device = torch.device(
-            "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+        device = torch.device("cuda" if torch.cuda.is_available() else "mps")
     else:
         device = torch.device(device)
 

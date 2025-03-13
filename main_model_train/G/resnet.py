@@ -115,7 +115,7 @@ class DiabeticDataset(Dataset):
     def __init__(self, df, transform=None):
         self.df = df
         self.transform = transform
-        self.resize = transforms.Resize((256, 512))  # 统一调整尺寸
+        self.resize = transforms.Resize((512, 256))  # 统一调整尺寸
 
     def __len__(self):
         return len(self.df)
@@ -131,12 +131,13 @@ class DiabeticDataset(Dataset):
         right_img = remove_black_borders(right_img)
 
         # 调整尺寸并拼接
-        left_img = self.resize(left_img.convert('RGB'))
-        right_img = self.resize(right_img.convert('RGB'))
+        left_img = self.resize(left_img)
+        right_img = self.resize(right_img)
 
         combined = Image.new('RGB', (512, 512))
         combined.paste(left_img, (0, 0))
         combined.paste(right_img, (256, 0))
+        cv2.imwrite('test.jpg', np.array(combined))
 
         if self.transform:
             combined = self.transform(combined)

@@ -14,11 +14,16 @@ from tqdm import tqdm
 import seaborn as sns
 
 from config import ROOT_DIR
+from optic_disk.optic_disk_detection import OpticDiscSegmentor
+from vessel.vessel_detection import VesselSegmentor
 
 # 配置参数
 RANDOM_SEED = 42  # 随机种子
 TEST_SIZE = 0.2  # 验证集比例
 PATIENCE = 5  # 早停计数器
+VESSEL_MODEL_PATH = ROOT_DIR / 'vessel/best_vessel_model.pth'
+OPTIC_DISC_MODEL_PATH = ROOT_DIR / 'optic_disk/best_disk_model.pth'
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'mps')
 
 
 def remove_black_borders(pil_img):
@@ -116,21 +121,21 @@ def load_dataset():
         })
     return pd.DataFrame(data)
 
-# 修改数据集类（添加数据增强）
 class DiabeticDataset(Dataset):
     def __init__(self, df, transform=None, is_train=True):
         self.df = df
         self.is_train = is_train
 
-        # 定义基础变换
+        # 初始化血管和视盘模型
+        self.vessel_model = self._load_vessel_model()
+        self.disk_model = self._load_disk_model()
+
+        # 修改transform处理3通道输入
         self.base_transform = transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
+            transforms.Resize(224),
             transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
 
-        # 训练集增强
         self.train_transform = transforms.Compose([
             transforms.RandomHorizontalFlip(),
             transforms.RandomVerticalFlip(),
@@ -143,14 +148,115 @@ class DiabeticDataset(Dataset):
             self.train_transform if is_train else self.base_transform
         )
 
-    def __len__(self):
-        return len(self.df)
+    def _load_vessel_model(self):
+        model = VesselSegmentor().to(DEVICE)
+        model.load_state_dict(torch.load(VESSEL_MODEL_PATH, map_location=DEVICE))
+        model.eval()
+        return model
+
+    def _load_disk_model(self):
+        model = OpticDiscSegmentor().to(DEVICE)
+        model.load_state_dict(torch.load(OPTIC_DISC_MODEL_PATH, map_location=DEVICE))
+        model.eval()
+        return model
+
+    def _get_channels(self, img_path):
+        # 通道1：灰度图
+        gray = Image.open(img_path).convert('L').resize((224, 224))
+
+        # 通道2：血管分割
+        vessel_mask = predict_vessels(self.vessel_model, img_path, DEVICE)
+
+        # 通道3：视盘分割
+        disk_mask = predict_disk(self.disk_model, img_path, DEVICE)
+
+        gray = np.array(gray)
+
+
+
+
+        # 合并通道
+        combined = np.stack([gray, vessel_mask, disk_mask], axis=-1)
+        return Image.fromarray(combined)
 
     def __getitem__(self, idx):
         item = self.df.iloc[idx]
-        img = Image.open(item['path']).convert('RGB')
-        img = remove_black_borders(img)
-        return self.transform(img), item['label']
+        img_path = str(item['path'])
+
+        # 生成三通道图像
+        img = self._get_channels(img_path)
+        img = self.transform(img)
+
+        # 单独标准化每个通道
+        img = transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])(img)
+
+        return img, item['label']
+
+    def __len__(self):
+        return len(self.df)
+
+# 添加预测函数
+def predict_vessels(model, img_path, device):
+    # 预处理
+    img = Image.open(img_path).convert('RGB')
+    img = remove_black_borders(img)
+    img = img.resize((512, 512))
+
+    # 转换为模型输入
+    input_tensor = transforms.ToTensor()(img).unsqueeze(0).to(device)
+
+    # 推理
+    with torch.no_grad():
+        output = model(input_tensor)
+
+    # 后处理
+    mask = (output.squeeze().cpu().numpy() > 0.5).astype(np.uint8) * 255
+    img = img.convert('L')
+    img = np.array(img)
+    img[mask == 0] = [0]  # 黑色背景
+    img = np.array(Image.fromarray(img).resize((224, 224)))
+
+    return img
+
+def predict_disk(model, img_path, device):
+    # 预处理
+    img = Image.open(img_path).convert('RGB')
+    img = remove_black_borders(img)
+    img = img.resize((512, 512))
+
+    # 转换为模型输入
+    input_tensor = transforms.ToTensor()(img).unsqueeze(0).to(device)
+
+    # 推理
+    with torch.no_grad():
+        output = model(input_tensor)
+
+    # 后处理
+    mask = (output.squeeze().cpu().numpy() > 0.5).astype(np.uint8) * 255
+
+    # 应用到原图
+    img = np.array(img)
+    img[mask != 0] = [0, 0, 0]  # 黑色背景
+    img = remove_black_borders(Image.fromarray(img)).resize((224, 224))
+    img = np.array(img.convert('L'))
+
+    return img
+
+# 修改模型输入通道
+class CustomResNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        # 直接使用原始resnet50
+        self.base = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
+
+        # 仅修改最后的全连接层
+        self.base.fc = nn.Sequential(
+            nn.Dropout(0.5),
+            nn.Linear(self.base.fc.in_features, 2)
+        )
+
+    def forward(self, x):
+        return self.base(x)
 
 def main():
     # 加载完整数据集
@@ -186,24 +292,19 @@ def main():
         train_dataset,
         batch_size=BATCH_SIZE,
         shuffle=True,
-        num_workers=4,
+        num_workers=0,
         pin_memory=True
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=BATCH_SIZE,
         shuffle=False,
-        num_workers=4,
+        num_workers=0,
         pin_memory=True
     )
 
     # 初始化模型
-    model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
-    num_features = model.fc.in_features
-    model.fc = nn.Sequential(
-        nn.Dropout(0.5),
-        nn.Linear(num_features, 2)
-    )
+    model = CustomResNet()
 
     # 训练配置
     device = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')

@@ -1,8 +1,10 @@
+import numpy as np
 import pandas as pd
 import os
 from PIL import Image
 import torch
 import torch.nn as nn
+from sklearn.metrics import f1_score, classification_report
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 from torchvision.models import resnet50, ResNet50_Weights
@@ -70,8 +72,15 @@ def main():
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    # 划分训练集和验证集
-    train_df, val_df = train_test_split(valid_df, test_size=0.2, random_state=42)
+    # 划分数据集后添加类别权重计算
+    train_df, val_df = train_test_split(valid_df, test_size=0.2, random_state=42, stratify=valid_df['label'])
+
+    # 计算类别权重
+    class_counts = train_df['label'].value_counts().sort_index().values
+    class_weights = 1. / torch.tensor(class_counts, dtype=torch.float32)
+    class_weights = class_weights / class_weights.sum() * len(class_counts)
+    print(f"\n类别分布: {dict(train_df['label'].value_counts())}")
+    print(f"类别权重: {class_weights.numpy()}")
 
     # 创建数据集和数据加载器
     train_dataset = EyeDataset(train_df, transform=transform)
@@ -88,11 +97,13 @@ def main():
     # 训练配置
     device = torch.device('mps')
     model = model.to(device)
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(weight=class_weights.to(device))  # 添加权重
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
     # 训练循环
     best_val_acc = 0
+    early_stop_counter = 0
+    PATIENCE = 5
     for epoch in range(20):
         # 训练阶段
         model.train()
@@ -111,9 +122,9 @@ def main():
 
         # 验证阶段
         model.eval()
+        all_preds = []
+        all_labels = []
         val_loss = 0
-        correct = 0
-        total = 0
         with torch.no_grad():
             for inputs, labels in val_loader:
                 inputs = inputs.to(device)
@@ -123,25 +134,40 @@ def main():
                 loss = criterion(outputs, labels)
 
                 val_loss += loss.item() * inputs.size(0)
-                _, predicted = torch.max(outputs, 1)
-                correct += (predicted == labels).sum().item()
-                total += labels.size(0)
+                _, preds = torch.max(outputs, 1)
 
-        # 计算指标
-        train_loss = train_loss / len(train_dataset)
-        val_loss = val_loss / len(val_dataset)
-        val_acc = correct / total
+                all_preds.extend(preds.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
 
-        print(f'Epoch {epoch + 1:02}')
-        print(f'Train Loss: {train_loss:.4f}  Val Loss: {val_loss:.4f}')
-        print(f'Val Acc: {val_acc:.4f}\n')
+        # 计算多种指标
+        val_loss /= len(val_dataset)
+        val_acc = (np.array(all_preds) == np.array(all_labels)).mean()
+        val_f1 = f1_score(all_labels, all_preds, zero_division=0)
+        report = classification_report(all_labels, all_preds,
+                                       target_names=['健康', '患病'],
+                                       output_dict=True)
 
-        # 保存最佳模型
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
+        # 早停逻辑（基于F1-score）
+        if val_f1 > best_f1:
+            best_f1 = val_f1
             torch.save(model.state_dict(), 'C_best.pth')
+            early_stop_counter = 0
+        else:
+            early_stop_counter += 1
+            if early_stop_counter >= PATIENCE:
+                print(f"\n早停触发！最佳验证F1-score: {best_f1:.4f}")
+                break
 
-    print(f'Best Validation Accuracy: {best_val_acc:.4f}')
+        # 详细指标输出
+        print(f"\nEpoch {epoch + 1:02}")
+        print(f"训练损失: {train_loss:.4f} | 验证损失: {val_loss:.4f}")
+        print(f"准确率: {val_acc:.4f} | F1-score: {val_f1:.4f}")
+        print(f"患病召回率: {report['患病']['recall']:.4f} | 患病精确率: {report['患病']['precision']:.4f}")
+        print(classification_report(all_labels, all_preds,
+                                    target_names=['健康', '患病'],
+                                    zero_division=0))
+
+    print(f"\n最佳验证F1-score: {best_f1:.4f}")
 
 
 if __name__ == '__main__':

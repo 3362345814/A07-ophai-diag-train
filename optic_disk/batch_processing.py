@@ -5,14 +5,14 @@ from config import ROOT_DIR
 from optic_disk.test import predict_and_save
 
 # 配置路径
-input_dir = ROOT_DIR / "dataset/Archive/preprocessed_images"
-output_dir = ROOT_DIR / "dataset/Archive/optic_mask"
+input_dir = ROOT_DIR / "dataset/C_D_G/normal"
+output_dir = ROOT_DIR / "dataset/C_D_G/normal_optic_mask"
 os.makedirs(output_dir, exist_ok=True)  # 自动创建输出目录
 
 
 # 遍历所有图像文件
 for filename in tqdm(os.listdir(input_dir)):
-    if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp')):
+    if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
         # 构造路径
         input_path = os.path.join(input_dir, filename)
 
@@ -23,7 +23,7 @@ for filename in tqdm(os.listdir(input_dir)):
 
         predict_and_save(
             image_path=input_path,
-            model_path="best_disc_model.pth",
+            model_path="best_disk_model.pth",
             output_path=output_path
         )
 

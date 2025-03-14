@@ -6,9 +6,9 @@ from tqdm import tqdm
 from config import ROOT_DIR
 
 # 配置路径
-original_dir = ROOT_DIR / "dataset/Archive/preprocessed_images"
-mask_dir = ROOT_DIR / "dataset/Archive/optic_mask"
-output_dir = ROOT_DIR / "dataset/Archive/optic_disk"
+original_dir = ROOT_DIR / "dataset/C_D_G/normal"
+mask_dir = ROOT_DIR / "dataset/C_D_G/normal_optic_mask"
+output_dir = ROOT_DIR / "dataset/C_D_G/normal_optic_disk"
 os.makedirs(output_dir, exist_ok=True)
 
 

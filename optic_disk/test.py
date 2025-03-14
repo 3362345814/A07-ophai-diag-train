@@ -83,6 +83,6 @@ if __name__ == "__main__":
     # 使用示例
     predict_and_save(
         image_path=ROOT_DIR / "dataset/optic_disk/PALM-Testing400-Images/T0012.jpg",  # 输入图像路径
-        model_path="best_disc_model.pth",  # 训练好的模型路径
+        model_path="best_disk_model.pth",  # 训练好的模型路径
         output_path="predicted_mask.jpg"  # 输出掩码路径
     )

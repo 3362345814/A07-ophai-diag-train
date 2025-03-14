@@ -17,7 +17,7 @@ from optic_disk.optic_disk_detection import OpticDiscSegmentor
 Image.MAX_IMAGE_PIXELS = None
 warnings.simplefilter('ignore', Image.DecompressionBombWarning)
 
-OPTIC_MODEL_PATH = ROOT_DIR / 'optic_disk/best_disc_model.pth'
+OPTIC_MODEL_PATH = ROOT_DIR / 'optic_disk/best_disk_model.pth'
 
 
 def mask_predict(image_path, model_path, device='auto'):
@@ -176,8 +176,8 @@ def run_inference(left_path, right_path, model_path='G_best.pth'):
 # 使用示例
 if __name__ == '__main__':
     # 替换为实际的图像路径
-    left_eye_path = ROOT_DIR / 'dataset/C_D_G/normal/84_left.jpg'
-    right_eye_path = ROOT_DIR / 'dataset/C_D_G/normal/84_right.jpg'
+    left_eye_path = ROOT_DIR / 'dataset/Archive/preprocessed_images/167_left.jpg'
+    right_eye_path = ROOT_DIR / 'dataset/Archive/preprocessed_images/167_right.jpg'
 
     result = run_inference(left_eye_path, right_eye_path)
 

@@ -153,7 +153,7 @@ def main():
 
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
-            torch.save(model.state_dict(), "best_disc_model.pth")
+            torch.save(model.state_dict(), "best_disk_model.pth")
             print(f"Epoch {epoch}: 保存最佳模型，验证损失: {avg_val_loss:.4f}")
 
 

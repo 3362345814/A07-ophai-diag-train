@@ -87,8 +87,8 @@ def run_inference(left_path, right_path, model_path='D_best.pth'):
 # 使用示例
 if __name__ == '__main__':
     # 替换为实际的图像路径
-    left_eye_path = ROOT_DIR / 'dataset/Archive/preprocessed_images/14_left.jpg'
-    right_eye_path = ROOT_DIR / 'dataset/Archive/preprocessed_images/13_right.jpg'
+    left_eye_path = ROOT_DIR / 'dataset/C_D_G/glaucoma/_221_5014924.jpg'
+    right_eye_path = ROOT_DIR / 'dataset/C_D_G/glaucoma/_222_8813596.jpg'
 
     result = run_inference(left_eye_path, right_eye_path)
 

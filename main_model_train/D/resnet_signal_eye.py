@@ -307,9 +307,8 @@ def main():
     model = CustomResNet()
 
     # 训练配置
-    device = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
-    model = model.to(device)
-    criterion = nn.CrossEntropyLoss(weight=class_weights.to(device))
+    model = model.to(DEVICE)
+    criterion = nn.CrossEntropyLoss(weight=class_weights.to(DEVICE))
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)
 
 
@@ -328,8 +327,8 @@ def main():
         model.train()
         train_loss = 0
         for inputs, labels in tqdm(train_loader, desc=f'Epoch {epoch + 1}'):
-            inputs = inputs.to(device)
-            labels = labels.to(device).long()
+            inputs = inputs.to(DEVICE)
+            labels = labels.to(DEVICE).long()
 
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -346,8 +345,8 @@ def main():
         val_loss = 0
         with torch.no_grad():
             for inputs, labels in val_loader:
-                inputs = inputs.to(device)
-                labels = labels.to(device).long()
+                inputs = inputs.to(DEVICE)
+                labels = labels.to(DEVICE).long()
 
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
@@ -404,8 +403,8 @@ def main():
     all_true = []
     with torch.no_grad():
         for inputs, labels in val_loader:
-            inputs = inputs.to(device)
-            labels = labels.to(device).long()
+            inputs = inputs.to(DEVICE)
+            labels = labels.to(DEVICE).long()
 
             outputs = model(inputs)
             probs = torch.softmax(outputs, dim=1)[:, 1].cpu().numpy()

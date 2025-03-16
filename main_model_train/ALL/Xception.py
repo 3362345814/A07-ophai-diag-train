@@ -9,6 +9,8 @@ from sklearn.model_selection import train_test_split
 from keras.src.applications.xception import Xception
 from keras import layers, Model
 import keras
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning)
 
 from config import ROOT_DIR
 
@@ -43,13 +45,17 @@ class EnhancedEyeGenerator(Sequence):
         # 获取每个类别样本数
         class_counts = df[CLASS_NAMES].sum(axis=0)
         median_count = np.median(class_counts)
+        print(median_count)
+        print(class_counts)
 
         # 创建过采样后的数据集
         dfs = [df]
         for idx, cls in enumerate(CLASS_NAMES):
-            if class_counts[idx] < median_count * 0.3:
+            if class_counts[idx] < median_count:
+                print(cls)
                 minority_df = df[df[cls] == 1]
-                repeat_times = int(median_count / class_counts[idx])
+                repeat_times = int(median_count / class_counts[idx] * 2)
+                print(repeat_times)
                 dfs.append(minority_df.sample(n=len(minority_df) * repeat_times, replace=True))
 
         return pd.concat(dfs).sample(frac=1).reset_index(drop=True)

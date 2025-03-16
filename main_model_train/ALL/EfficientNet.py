@@ -16,7 +16,7 @@ from config import ROOT_DIR
 DATA_DIR = ROOT_DIR / "dataset/Archive/preprocessed_images"
 CSV_PATH = ROOT_DIR / "dataset/Archive/full_df.csv"
 IMAGE_SIZE = 300  # EfficientNetB3标准输入尺寸
-BATCH_SIZE = 32
+BATCH_SIZE = 16
 CLASS_NAMES = ['N', 'D', 'G', 'C', 'A', 'H', 'M', 'O']
 
 # 数据增强序列
@@ -183,26 +183,26 @@ def train_in_two_stages():
         metrics=['accuracy', MacroRecall(len(CLASS_NAMES)), MacroF1(len(CLASS_NAMES))]
     )
 
-    # 第一阶段训练
-    phase1 = model.fit(
-        train_gen,
-        validation_data=valid_gen,
-        epochs=15,
-        callbacks=[
-            keras.callbacks.ModelCheckpoint(
-                'phase1_best.h5',
-                save_best_only=True,
-                monitor='val_macro_f1',
-                mode='max'
-            ),
-            keras.callbacks.ReduceLROnPlateau(
-                monitor='val_loss',
-                factor=0.5,
-                patience=2,
-                verbose=1
-            )
-        ]
-    )
+    # # 第一阶段训练
+    # phase1 = model.fit(
+    #     train_gen,
+    #     validation_data=valid_gen,
+    #     epochs=15,
+    #     callbacks=[
+    #         keras.callbacks.ModelCheckpoint(
+    #             'phase1_best.h5',
+    #             save_best_only=True,
+    #             monitor='val_macro_f1',
+    #             mode='max'
+    #         ),
+    #         keras.callbacks.ReduceLROnPlateau(
+    #             monitor='val_loss',
+    #             factor=0.5,
+    #             patience=2,
+    #             verbose=1
+    #         )
+    #     ]
+    # )
 
     # 第二阶段：微调整个模型
     model = keras.models.load_model('phase1_best.h5', custom_objects={
@@ -211,8 +211,8 @@ def train_in_two_stages():
         'MacroF1': lambda: MacroF1(len(CLASS_NAMES))
     })
 
-    # 解冻并微调最后15层
-    for layer in model.layers[0].layers[-15:]:
+    # 解冻并微调最后15层（修正基础模型访问方式）
+    for layer in model.layers[-15:]:  # 直接访问主模型的最后15层
         if not isinstance(layer, layers.BatchNormalization):
             layer.trainable = True
 

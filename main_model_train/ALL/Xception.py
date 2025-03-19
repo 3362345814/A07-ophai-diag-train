@@ -21,6 +21,9 @@ CSV_PATH = ROOT_DIR / "dataset/Archive/full_df.csv"
 IMAGE_SIZE = 299
 BATCH_SIZE = 16
 CLASS_NAMES = ['D', 'G', 'C', 'A', 'H', 'M', 'O']
+SEED = 42
+np.random.seed(SEED)
+tf.random.set_seed(SEED)
 
 # 数据增强序列
 aug_seq = iaa.Sequential([
@@ -113,6 +116,26 @@ class EnhancedEyeGenerator(Sequence):
 
 
 # 构建Xception模型
+# 新增SE注意力模块
+class SEBlock(layers.Layer):
+    def __init__(self, ratio=16, **kwargs):
+        super(SEBlock, self).__init__(**kwargs)
+        self.ratio = ratio
+
+    def build(self, input_shape):
+        self.channels = input_shape[-1]
+        self.se = keras.Sequential([
+            layers.GlobalAveragePooling2D(),
+            layers.Dense(self.channels // self.ratio, activation='relu'),
+            layers.Dense(self.channels, activation='sigmoid'),
+            layers.Reshape((1, 1, self.channels))
+        ])
+        super(SEBlock, self).build(input_shape)
+
+    def call(self, inputs):
+        return inputs * self.se(inputs)
+
+# 修改后的模型构建函数
 def build_xception():
     base = Xception(
         weights='imagenet',
@@ -120,8 +143,10 @@ def build_xception():
         input_shape=(IMAGE_SIZE, IMAGE_SIZE, 3)
     )
 
-    # 自定义顶层
-    x = layers.GlobalAveragePooling2D()(base.output)
+    # 添加SE注意力模块
+    x = base.output
+    x = SEBlock()(x)  # 新增SE注意力层
+    x = layers.GlobalAveragePooling2D()(x)
     x = layers.Dense(512, activation='relu')(x)
     x = layers.Dropout(0.5)(x)
     outputs = layers.Dense(len(CLASS_NAMES), activation='sigmoid')(x)
@@ -176,6 +201,35 @@ class MacroF1(keras.metrics.Metric):
             r.reset_state()
 
 # 分步训练函数
+# 在MacroF1类后添加自定义早停回调
+class CompositeEarlyStopping(keras.callbacks.Callback):
+    def __init__(self, monitor_metrics=('accuracy', 'macro_recall', 'macro_f1'),
+                 patience=4, verbose=1, restore_best_weights=True):
+        super().__init__()
+        self.metrics = monitor_metrics
+        self.patience = patience
+        self.verbose = verbose
+        self.restore_best_weights = restore_best_weights
+        self.best_score = -np.inf
+        self.wait = 0
+
+    def on_epoch_end(self, epoch, logs=None):
+        current_score = np.mean([logs.get(f'val_{m}') for m in self.metrics])
+        if current_score > self.best_score:
+            self.best_score = current_score
+            self.wait = 0
+            self.best_weights = self.model.get_weights()
+        else:
+            self.wait += 1
+            if self.wait >= self.patience:
+                if self.verbose > 0:
+                    print(f'\nEpoch {epoch}: Early stopping')
+                    print(f'Best composite score: {self.best_score:.4f}')
+                if self.restore_best_weights:
+                    self.model.set_weights(self.best_weights)
+                self.model.stop_training = True
+
+# 修改两处EarlyStopping回调（第一阶段和第二阶段）
 def train_in_two_stages():
     # 数据准备
     df = pd.read_csv(CSV_PATH)
@@ -215,17 +269,23 @@ def train_in_two_stages():
                 mode='max'
             ),
             keras.callbacks.ReduceLROnPlateau(
-                monitor='val_loss',
+                monitor='val_macro_f1',
                 patience=2,
                 factor=0.5,
                 verbose=1
             ),
-            keras.callbacks.EarlyStopping(
-                monitor='val_accuracy',
-                mode='max',
-                patience=4,
+            CompositeEarlyStopping(
+                monitor_metrics=('accuracy', 'macro_recall', 'macro_f1'),
+                patience=5,
                 verbose=1,
                 restore_best_weights=True
+            ),
+            keras.callbacks.TensorBoard(
+                log_dir='./logs/stage1',
+                histogram_freq=1,
+                update_freq='epoch',
+                write_graph=True,
+                write_images=False
             )
         ]
     )
@@ -234,7 +294,8 @@ def train_in_two_stages():
     model = keras.models.load_model('phase1_best.h5', custom_objects={
         'weighted_bce': weighted_bce,
         'MacroRecall': lambda: MacroRecall(len(CLASS_NAMES)),
-        'MacroF1': lambda: MacroF1(len(CLASS_NAMES))
+        'MacroF1': lambda: MacroF1(len(CLASS_NAMES)),
+        'SEBlock': SEBlock  # 添加SEBlock到custom_objects
     })
     model.layers[0].trainable = True
 
@@ -260,12 +321,18 @@ def train_in_two_stages():
                 monitor='val_macro_f1',
                 mode='max'
             ),
-            keras.callbacks.EarlyStopping(
-                monitor='val_macro_f1',
-                mode='max',
-                patience=4,
+            CompositeEarlyStopping(
+                monitor_metrics=('accuracy', 'macro_recall', 'macro_f1'),
+                patience=5,
                 verbose=1,
                 restore_best_weights=True
+            ),
+            keras.callbacks.TensorBoard(
+                log_dir='./logs/stage2',
+                histogram_freq=1,
+                update_freq='epoch',
+                write_graph=True,
+                write_images=False
             )
         ]
     )

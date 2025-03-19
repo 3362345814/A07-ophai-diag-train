@@ -126,10 +126,10 @@ def evaluate_model(model_path, test_df):
 
 if __name__ == "__main__":
     # 加载完整数据
-    df = pd.read_csv(CSV_PATH)
+    df = pd.read_csv(CSV_PATH)[:500]
 
     # 使用全部数据进行测试
-    results = evaluate_model('fina_30epoch_0.76acc_model.h5', df)
+    results = evaluate_model('final_model_20250318_212530.h5', df)
 
     # 打印结果
     pd.set_option('display.max_columns', None)

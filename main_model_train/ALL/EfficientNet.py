@@ -183,26 +183,26 @@ def train_in_two_stages():
         metrics=['accuracy', MacroRecall(len(CLASS_NAMES)), MacroF1(len(CLASS_NAMES))]
     )
 
-    # # 第一阶段训练
-    # phase1 = model.fit(
-    #     train_gen,
-    #     validation_data=valid_gen,
-    #     epochs=15,
-    #     callbacks=[
-    #         keras.callbacks.ModelCheckpoint(
-    #             'phase1_best.h5',
-    #             save_best_only=True,
-    #             monitor='val_macro_f1',
-    #             mode='max'
-    #         ),
-    #         keras.callbacks.ReduceLROnPlateau(
-    #             monitor='val_loss',
-    #             factor=0.5,
-    #             patience=2,
-    #             verbose=1
-    #         )
-    #     ]
-    # )
+    # 第一阶段训练
+    phase1 = model.fit(
+        train_gen,
+        validation_data=valid_gen,
+        epochs=15,
+        callbacks=[
+            keras.callbacks.ModelCheckpoint(
+                'phase1_best.h5',
+                save_best_only=True,
+                monitor='val_macro_f1',
+                mode='max'
+            ),
+            keras.callbacks.ReduceLROnPlateau(
+                monitor='val_loss',
+                factor=0.5,
+                patience=2,
+                verbose=1
+            )
+        ]
+    )
 
     # 第二阶段：微调整个模型
     model = keras.models.load_model('phase1_best.h5', custom_objects={

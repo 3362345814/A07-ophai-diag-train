@@ -1,4 +1,5 @@
 import os
+
 import cv2
 import numpy as np
 import pandas as pd
@@ -18,8 +19,8 @@ from config import ROOT_DIR
 DATA_DIR = ROOT_DIR / "dataset/Archive/preprocessed_images"
 CSV_PATH = ROOT_DIR / "dataset/Archive/full_df.csv"
 IMAGE_SIZE = 299
-BATCH_SIZE = 32
-CLASS_NAMES = ['N', 'D', 'G', 'C', 'A', 'H', 'M', 'O']
+BATCH_SIZE = 16
+CLASS_NAMES = ['D', 'G', 'C', 'A', 'H', 'M', 'O']
 
 # 数据增强序列
 aug_seq = iaa.Sequential([
@@ -107,7 +108,6 @@ class EnhancedEyeGenerator(Sequence):
         # 图片左右拼接并改为正方形
         img = np.concatenate([img_left, img_right], axis=1)
         img = cv2.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
-        cv2.imwrite('test.jpg', img)
 
         return img / 255.0
 
@@ -206,7 +206,7 @@ def train_in_two_stages():
     phase1 = model.fit(
         train_gen,
         validation_data=valid_gen,
-        epochs=20,
+        epochs=100,
         callbacks=[
             keras.callbacks.ModelCheckpoint(
                 'phase1_best.h5',
@@ -221,9 +221,9 @@ def train_in_two_stages():
                 verbose=1
             ),
             keras.callbacks.EarlyStopping(
-                monitor='val_macro_f1',
+                monitor='val_accuracy',
                 mode='max',
-                patience=5,
+                patience=4,
                 verbose=1,
                 restore_best_weights=True
             )
@@ -251,10 +251,11 @@ def train_in_two_stages():
     phase2 = model.fit(
         train_gen,
         validation_data=valid_gen,
-        epochs=30,
+        epochs=100,
         callbacks=[
             keras.callbacks.ModelCheckpoint(
-                'final_model.h5',
+                # 添加保存时间戳
+                'final_model' + '_' + str(pd.Timestamp.now().strftime("%Y%m%d_%H%M%S") + '.h5'),
                 save_best_only=True,
                 monitor='val_macro_f1',
                 mode='max'
@@ -262,7 +263,7 @@ def train_in_two_stages():
             keras.callbacks.EarlyStopping(
                 monitor='val_macro_f1',
                 mode='max',
-                patience=5,
+                patience=4,
                 verbose=1,
                 restore_best_weights=True
             )

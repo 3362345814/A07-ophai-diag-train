@@ -16,7 +16,7 @@ from keras.api.models import load_model
 import numpy as np
 
 from main_model_train.ALL.Xception import CSV_PATH, CLASS_NAMES, EnhancedEyeGenerator, BATCH_SIZE, MacroF1, MacroRecall, \
-    weighted_bce
+    weighted_bce, SEBlock
 
 
 def evaluate_model(model_path, test_df):
@@ -24,7 +24,8 @@ def evaluate_model(model_path, test_df):
     model = load_model(model_path, custom_objects={
         'weighted_bce': weighted_bce,
         'MacroRecall': lambda: MacroRecall(len(CLASS_NAMES)),
-        'MacroF1': lambda: MacroF1(len(CLASS_NAMES))
+        'MacroF1': lambda: MacroF1(len(CLASS_NAMES)),
+        'SEBlock': SEBlock
     })
 
     # 创建测试数据生成器（不进行过采样和增强）
@@ -77,7 +78,7 @@ def evaluate_model(model_path, test_df):
 
         # 绘制单类ROC曲线
         plt.plot(fpr[i], tpr[i], color=next(colors),
-                 label=f'{class_name} (AUC = {roc_auc[i]:.2f})')
+                 label=f'{class_name} (AUC = {roc_auc[i]:.4f})')
 
     # 计算宏观平均指标
     metrics['Class'].append('Macro Avg')
@@ -98,9 +99,37 @@ def evaluate_model(model_path, test_df):
     plt.close()
 
     # 生成分类报告
-    report = classification_report(y_true, y_pred_bin, target_names=CLASS_NAMES)
+    # 生成分类报告并保存为柱状图
+    report = classification_report(y_true, y_pred_bin, target_names=CLASS_NAMES, output_dict=True)
+
+    # 创建指标数据框
+    df_report = pd.DataFrame(report).transpose().reset_index().rename(columns={'index': 'Class'})
+    df_report = df_report[df_report['Class'].isin(CLASS_NAMES + ['macro avg'])]  # 过滤需要展示的类别
+
+    # 创建柱状图
+    plt.figure(figsize=(15, 8))
+    plt.subplot(1, 2, 1)
+    sns.barplot(x='Class', y='f1-score', data=df_report, color='skyblue', label='F1-Score')
+    sns.barplot(x='Class', y='recall', data=df_report, color='orange', label='Recall', alpha=0.7)
+    plt.title('Classification Metrics')
+    plt.xticks(rotation=45)
+    plt.legend()
+    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+
+    plt.subplot(1, 2, 2)
+    sns.barplot(x='Class', y='precision', data=df_report, color='lightgreen', label='Precision')
+    plt.title('Precision Metrics')
+    plt.xticks(rotation=45)
+    plt.legend()
+    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+
+    plt.tight_layout()
+    plt.savefig('classification_report.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+    # 原始文本报告保存保持不变...
     with open('classification_report.txt', 'w') as f:
-        f.write(report)
+        f.write(classification_report(y_true, y_pred_bin, target_names=CLASS_NAMES))
 
     # 生成混淆矩阵面板
     plt.figure(figsize=(15, 12))
@@ -126,10 +155,10 @@ def evaluate_model(model_path, test_df):
 
 if __name__ == "__main__":
     # 加载完整数据
-    df = pd.read_csv(CSV_PATH)[:500]
+    df = pd.read_csv(CSV_PATH)
 
     # 使用全部数据进行测试
-    results = evaluate_model('final_model_20250318_212530.h5', df)
+    results = evaluate_model('final_model_20250319_154850.h5', df)
 
     # 打印结果
     pd.set_option('display.max_columns', None)

@@ -95,7 +95,7 @@ def evaluate_model(model_path, test_df):
     plt.ylabel('True Positive Rate')
     plt.title('Multi-class ROC Curves')
     plt.legend(loc="lower right")
-    plt.savefig('roc_curves.png', dpi=300, bbox_inches='tight')
+    plt.savefig('result/roc_curves.png', dpi=300, bbox_inches='tight')
     plt.close()
 
     # 生成分类报告
@@ -124,12 +124,8 @@ def evaluate_model(model_path, test_df):
     plt.grid(True, axis='y', linestyle='--', alpha=0.7)
 
     plt.tight_layout()
-    plt.savefig('classification_report.png', dpi=300, bbox_inches='tight')
+    plt.savefig('result/classification_report.png', dpi=300, bbox_inches='tight')
     plt.close()
-
-    # 原始文本报告保存保持不变...
-    with open('classification_report.txt', 'w') as f:
-        f.write(classification_report(y_true, y_pred_bin, target_names=CLASS_NAMES))
 
     # 生成混淆矩阵面板
     plt.figure(figsize=(15, 12))
@@ -143,7 +139,7 @@ def evaluate_model(model_path, test_df):
         plt.xlabel('Predicted')
         plt.ylabel('True')
     plt.tight_layout()
-    plt.savefig('confusion_matrices.png', dpi=300, bbox_inches='tight')
+    plt.savefig('result/confusion_matrices.png', dpi=300, bbox_inches='tight')
     plt.close()
 
     # 保存指标到Excel
@@ -158,7 +154,7 @@ if __name__ == "__main__":
     df = pd.read_csv(CSV_PATH)
 
     # 使用全部数据进行测试
-    results = evaluate_model('final_model_20250319_154850.h5', df)
+    results = evaluate_model('models/final_model_20250319_154850.h5', df)
 
     # 打印结果
     pd.set_option('display.max_columns', None)

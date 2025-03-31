@@ -190,7 +190,7 @@ def train_in_two_stages():
         epochs=15,
         callbacks=[
             keras.callbacks.ModelCheckpoint(
-                'phase1_best.h5',
+                'models/phase1_best.h5',
                 save_best_only=True,
                 monitor='val_macro_f1',
                 mode='max'
@@ -205,7 +205,7 @@ def train_in_two_stages():
     )
 
     # 第二阶段：微调整个模型
-    model = keras.models.load_model('phase1_best.h5', custom_objects={
+    model = keras.models.load_model('models/phase1_best.h5', custom_objects={
         'weighted_bce': weighted_bce,
         'MacroRecall': lambda: MacroRecall(len(CLASS_NAMES)),
         'MacroF1': lambda: MacroF1(len(CLASS_NAMES))

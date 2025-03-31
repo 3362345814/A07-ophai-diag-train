@@ -11,6 +11,7 @@ from keras import layers, Model
 from keras.api.utils import Sequence
 from keras.src.applications.xception import Xception
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MultiLabelBinarizer
 
 warnings.filterwarnings('ignore', category=FutureWarning)
 
@@ -21,7 +22,6 @@ DATA_DIR = ROOT_DIR / "dataset/Archive/preprocessed_images"
 CSV_PATH = ROOT_DIR / "dataset/Archive/full_df.csv"
 IMAGE_SIZE = 299
 BATCH_SIZE = 16
-CLASS_NAMES = ['D', 'G', 'C', 'A', 'H', 'M', 'O']
 SEED = 42
 np.random.seed(SEED)
 tf.random.set_seed(SEED)
@@ -36,42 +36,21 @@ aug_seq = iaa.Sequential([
 ])
 
 
-# 改进的数据生成器（包含过采样）
 class EnhancedEyeGenerator(Sequence):
     def __init__(self, df, class_weights, batch_size=32, augment=True):
         super().__init__()
-        self.df = self._oversample_minority(df)
+        self.df = df
         self.batch_size = batch_size
         self.augment = augment
         self.class_weights = class_weights
         self._prepare_data()
 
-    def _oversample_minority(self, df):
-        # 获取每个类别样本数
-        class_counts = df[CLASS_NAMES].sum(axis=0)
-        median_count = np.median(class_counts)
-        print(median_count)
-        print(class_counts)
-
-        # 创建过采样后的数据集
-        dfs = [df]
-        for idx, cls in enumerate(CLASS_NAMES):
-            if class_counts[idx] < median_count:
-                print(cls)
-                minority_df = df[df[cls] == 1]
-                repeat_times = int(median_count / class_counts[idx] * 2)
-                print(repeat_times)
-                dfs.append(minority_df.sample(n=len(minority_df) * repeat_times, replace=True))
-
-        return pd.concat(dfs).sample(frac=1).reset_index(drop=True)
-
     def _prepare_data(self):
-        self.sample_weights = []
-        for _, row in self.df.iterrows():
-            weight = sum([self.class_weights[i] for i, val in enumerate(row[CLASS_NAMES]) if val == 1])
-            self.sample_weights.append(weight)
-        self.sample_weights = np.array(self.sample_weights) / sum(self.sample_weights)
-
+        # 计算样本权重
+        self.sample_weights = self.df[self.class_names].apply(
+            lambda row: sum([self.class_weights[cls] for cls in self.class_names if row[cls] == 1]), axis=1
+        )
+        self.sample_weights = (self.sample_weights / self.sample_weights.sum()).values
         self.indices = np.arange(len(self.df))
         np.random.shuffle(self.indices)
 
@@ -84,7 +63,7 @@ class EnhancedEyeGenerator(Sequence):
 
     def _generate_batch(self, batch_indices):
         X = np.zeros((len(batch_indices), IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.float32)
-        y = np.zeros((len(batch_indices), len(CLASS_NAMES)), dtype=np.float32)
+        y = np.zeros((len(batch_indices), len(self.class_names)), dtype=np.float32)
 
         for i, idx in enumerate(batch_indices):
             row = self.df.iloc[idx]
@@ -92,32 +71,27 @@ class EnhancedEyeGenerator(Sequence):
             if img is None:
                 continue
             X[i] = img
-            y[i] = row[CLASS_NAMES].values.astype(np.float32)
+            y[i] = row[self.class_names].values.astype(np.float32)
 
         return X, y
 
     def _load_image(self, row):
-        if not os.path.exists(os.path.join(DATA_DIR, f"{row['ID']}_left.jpg")) or \
-                not os.path.exists(os.path.join(DATA_DIR, f"{row['ID']}_right.jpg")):
+        img_path = row['image_path']
+        if not os.path.exists(img_path):
             return None
-        img_left = cv2.imread(os.path.join(DATA_DIR, f"{row['ID']}_left.jpg"))
-        img_right = cv2.imread(os.path.join(DATA_DIR, f"{row['ID']}_right.jpg"))
-        img_left = cv2.resize(img_left, (IMAGE_SIZE, IMAGE_SIZE))
-        img_right = cv2.resize(img_right, (IMAGE_SIZE, IMAGE_SIZE))
+        img = cv2.imread(img_path)
+        img = cv2.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
 
         if self.augment:
-            img_left = aug_seq.augment_image(img_left)
-            img_right = aug_seq.augment_image(img_right)
-
-        # 图片左右拼接并改为正方形
-        img = np.concatenate([img_left, img_right], axis=1)
-        img = cv2.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
+            img = aug_seq.augment_image(img)
 
         return img / 255.0
 
+    @property
+    def class_names(self):
+        return [col for col in self.df.columns if col not in ['ID', 'keywords', 'image_path']]
 
-# 构建Xception模型
-# 新增SE注意力模块
+
 class SEBlock(layers.Layer):
     def __init__(self, ratio=16, **kwargs):
         super(SEBlock, self).__init__(**kwargs)
@@ -137,26 +111,23 @@ class SEBlock(layers.Layer):
         return inputs * self.se(inputs)
 
 
-# 修改后的模型构建函数
-def build_xception():
+def build_xception(num_classes):
     base = Xception(
         weights='imagenet',
         include_top=False,
         input_shape=(IMAGE_SIZE, IMAGE_SIZE, 3)
     )
 
-    # 添加SE注意力模块
     x = base.output
-    x = SEBlock()(x)  # 新增SE注意力层
+    x = SEBlock()(x)
     x = layers.GlobalAveragePooling2D()(x)
     x = layers.Dense(512, activation='relu')(x)
     x = layers.Dropout(0.5)(x)
-    outputs = layers.Dense(len(CLASS_NAMES), activation='sigmoid')(x)
+    outputs = layers.Dense(num_classes, activation='sigmoid')(x)
 
     return Model(inputs=base.input, outputs=outputs)
 
 
-# 自定义指标类
 class MacroRecall(keras.metrics.Metric):
     def __init__(self, num_classes, name='macro_recall', **kwargs):
         super(MacroRecall, self).__init__(name=name, **kwargs)
@@ -205,8 +176,6 @@ class MacroF1(keras.metrics.Metric):
             r.reset_state()
 
 
-# 分步训练函数
-# 在MacroF1类后添加自定义早停回调
 class CompositeEarlyStopping(keras.callbacks.Callback):
     def __init__(self, monitor_metrics=('accuracy', 'macro_recall', 'macro_f1'),
                  patience=4, verbose=1, restore_best_weights=True):
@@ -235,27 +204,66 @@ class CompositeEarlyStopping(keras.callbacks.Callback):
                 self.model.stop_training = True
 
 
-# 修改两处EarlyStopping回调（第一阶段和第二阶段）
+def get_weighted_bce(class_weights):
+    def weighted_bce(y_true, y_pred):
+        loss = keras.losses.binary_crossentropy(y_true, y_pred)
+        weights = tf.reduce_sum(class_weights * y_true, axis=-1) + 1.0
+        return tf.reduce_mean(loss * weights)
+
+    return weighted_bce
+
+
+def prepare_data():
+    # 原始数据加载
+    df = pd.read_csv(CSV_PATH)
+
+    # 创建样本数据集
+    samples = []
+    for _, row in df.iterrows():
+        for eye in ['Left', 'Right']:
+            img_path = DATA_DIR / f"{row['ID']}_{eye.lower()}.jpg"
+            if img_path.exists():
+                samples.append({
+                    'ID': f"{row['ID']}_{eye}",
+                    'image_path': str(img_path),
+                    'keywords': row[f'{eye}-Diagnostic Keywords']
+                })
+
+    samples_df = pd.DataFrame(samples)
+    samples_df['keywords'] = samples_df['keywords'].str.split(', ')
+
+    # 多标签编码
+    mlb = MultiLabelBinarizer()
+    keyword_labels = mlb.fit_transform(samples_df['keywords'])
+    class_names = mlb.classes_
+
+    for idx, cls in enumerate(class_names):
+        samples_df[cls] = keyword_labels[:, idx]
+
+    return samples_df, class_names
+
+
 def train_in_two_stages():
     # 数据准备
-    df = pd.read_csv(CSV_PATH)
-    train_df, valid_df = train_test_split(df, test_size=0.2, stratify=df[CLASS_NAMES].sum(axis=1))
+    samples_df, CLASS_NAMES = prepare_data()
+    train_df, valid_df = train_test_split(samples_df, test_size=0.2, random_state=SEED)
 
     # 计算类别权重
     class_counts = train_df[CLASS_NAMES].sum(axis=0)
     class_weights = (1 / (class_counts + 1e-6)) ** 0.5
+    class_weights_tensor = tf.constant(class_weights.values, dtype=tf.float32)
 
     # 创建生成器
     train_gen = EnhancedEyeGenerator(train_df, class_weights, BATCH_SIZE)
     valid_gen = EnhancedEyeGenerator(valid_df, class_weights, BATCH_SIZE, augment=False)
 
     # 第一阶段：训练顶层
-    model = build_xception()
+    model = build_xception(len(CLASS_NAMES))
     model.layers[0].trainable = False
 
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=1e-3),
-        loss=weighted_bce,
+        loss=get_weighted_bce(class_weights_tensor),
         metrics=[
             'accuracy',
             MacroRecall(num_classes=len(CLASS_NAMES)),
@@ -274,40 +282,27 @@ def train_in_two_stages():
                 monitor='val_macro_f1',
                 mode='max'
             ),
-            keras.callbacks.ReduceLROnPlateau(
-                monitor='val_macro_f1',
-                patience=2,
-                factor=0.5,
-                verbose=1
-            ),
             CompositeEarlyStopping(
                 monitor_metrics=('accuracy', 'macro_recall', 'macro_f1'),
                 patience=5,
                 verbose=1,
                 restore_best_weights=True
-            ),
-            keras.callbacks.TensorBoard(
-                log_dir='./logs/stage1',
-                histogram_freq=1,
-                update_freq='epoch',
-                write_graph=True,
-                write_images=False
             )
         ]
     )
 
     # 第二阶段：微调整个模型
     model = keras.models.load_model('phase1_best.h5', custom_objects={
-        'weighted_bce': weighted_bce,
+        'weighted_bce': get_weighted_bce(class_weights_tensor),
         'MacroRecall': lambda: MacroRecall(len(CLASS_NAMES)),
         'MacroF1': lambda: MacroF1(len(CLASS_NAMES)),
-        'SEBlock': SEBlock  # 添加SEBlock到custom_objects
+        'SEBlock': SEBlock
     })
     model.layers[0].trainable = True
 
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=1e-5),
-        loss=weighted_bce,
+        loss=get_weighted_bce(class_weights_tensor),
         metrics=[
             'accuracy',
             MacroRecall(num_classes=len(CLASS_NAMES)),
@@ -321,8 +316,7 @@ def train_in_two_stages():
         epochs=100,
         callbacks=[
             keras.callbacks.ModelCheckpoint(
-                # 添加保存时间戳
-                'final_model' + '_' + str(pd.Timestamp.now().strftime("%Y%m%d_%H%M%S") + '.h5'),
+                'final_model.h5',
                 save_best_only=True,
                 monitor='val_macro_f1',
                 mode='max'
@@ -332,27 +326,9 @@ def train_in_two_stages():
                 patience=5,
                 verbose=1,
                 restore_best_weights=True
-            ),
-            keras.callbacks.TensorBoard(
-                log_dir='./logs/stage2',
-                histogram_freq=1,
-                update_freq='epoch',
-                write_graph=True,
-                write_images=False
             )
         ]
     )
-
-
-# 改进的加权损失函数
-def weighted_bce(y_true, y_pred):
-    df = pd.read_csv(CSV_PATH)
-    class_counts = df[CLASS_NAMES].sum(axis=0)
-    median = np.median(class_counts)
-    class_weights = tf.cast(median / (class_counts + 1e-6), tf.float32)
-    loss = keras.losses.binary_crossentropy(y_true, y_pred)
-    weights = tf.reduce_sum(class_weights * y_true, axis=-1) + tf.reduce_sum(1.0 * (1 - y_true), axis=-1)
-    return tf.reduce_mean(loss * weights)
 
 
 if __name__ == "__main__":

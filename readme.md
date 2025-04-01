@@ -159,3 +159,14 @@ callbacks.append(CompositeEarlyStopping(metrics=('macro_f1', 'accuracy')))
 本系统的所有代码均开源，包括模型训练、数据处理、算法实现等。您可以通过以下链接访问完整代码：
 
 - https://github.com/3362345814/A07-ophai-diag-train.git
+
+## 数据可用性
+
+本系统的训练数据来自Kaggle EyePACS和IDRiD等公开数据集，包含疾病分类和视盘、血管检测。您可以通过以下链接访问数据集：
+
+- https://www.kaggle.com/datasets/deathtrooper/glaucoma-dataset-eyepacs-airogs-light-v2
+- https://www.kaggle.com/competitions/diabetic-retinopathy-detection/overview
+- https://www.kaggle.com/datasets/andrewmvd/ocular-disease-recognition-odir5k
+- https://www.kaggle.com/datasets/gunavenkatdoddi/eye-diseases-classification
+- https://aistudio.baidu.com/datasetdetail/177172
+- https://figshare.com/articles/figure/FIVES_A_Fundus_Image_Dataset_for_AI-based_Vessel_Segmentation/19688169/1?file=34969398

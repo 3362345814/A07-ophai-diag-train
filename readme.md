@@ -1,4 +1,4 @@
-# 疾病分类模型
+# 疾病分类模型（SE-Xception）
 
 ## 模型概述
 
@@ -41,13 +41,7 @@ class SEBlock(layers.Layer):
 
 采用两阶段渐进式训练策略：
 
-```mermaid
-graph TD
-    A[原始数据] --> B{动态过采样}
-    B --> C[类别平衡数据]
-    C --> D[冻结骨干网络训练]
-    D --> E[全局微调训练]
-```
+![流程图](images/stream.png)
 
 - **智能过采样**：基于中位频率的动态样本扩增算法，有效缓解类别不平衡问题（最小类别样本量提升3.2倍）
 - **自适应学习率**：采用余弦退火算法动态调整学习率（1e-3 → 1e-5）
@@ -57,8 +51,7 @@ graph TD
 ## 分阶式动态优化训练框架
 
 本系统独创**两阶段自适应进化训练范式**，结合医学影像特性与深度学习优化理论，实现模型性能的阶梯式跃迁。训练框架突破传统端到端模式，引入
-**特征解耦-全域微调**的渐进式优化路径，在Kaggle EyePACS、IDRiD等公开数据集验证中，模型收敛速度提升42%，最终准确率突破90.1%
-SOTA水平。
+**特征解耦-全域微调**的渐进式优化路径，在Kaggle EyePACS、IDRiD等公开数据集验证中，模型收敛速度提升42%，最终准确率突破90.1%。
 
 ### 1. 动态特征解耦阶段（Phase-I）
 
@@ -146,13 +139,13 @@ callbacks.append(CompositeEarlyStopping(metrics=('macro_f1', 'accuracy')))
 ### 3. 特征可视化分析
 
 <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
-    <div style="width: 48%; margin: 5px;">
+    <div style="width: 45%; margin: 1%;">
         <img src="images/11_left.jpg" style="width:100%;">
         <div style="text-align: center; color: #666; margin: 5px 0;">左眼原图</div>
         <img src="images/11_left_heatmap.jpg" style="width:100%;">
         <div style="text-align: center; color: #666; margin: 5px 0;">左眼热力图</div>
     </div>
-    <div style="width: 48%; margin: 5px;">
+    <div style="width: 45%; margin: 1%;">
         <img src="images/11_right.jpg" style="width:100%;">
         <div style="text-align: center; color: #666; margin: 5px 0;">右眼原图</div>
         <img src="images/11_right_heatmap.jpg" style="width:100%;">
@@ -160,3 +153,9 @@ callbacks.append(CompositeEarlyStopping(metrics=('macro_f1', 'accuracy')))
     </div>
 </div>
 通过SE模块的注意力权重热力图，模型聚焦于血管异常、渗出物等关键病变区域，验证了模型对疾病识别的有效性。
+
+## 代码可用性
+
+本系统的所有代码均开源，包括模型训练、数据处理、算法实现等。您可以通过以下链接访问完整代码：
+
+- https://github.com/3362345814/A07-ophai-diag-train.git

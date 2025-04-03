@@ -1,4 +1,10 @@
+from itertools import cycle
+
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+from keras.api.models import load_model
 from sklearn.metrics import (
     confusion_matrix,
     roc_curve,
@@ -9,11 +15,6 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score
 )
-from itertools import cycle
-import seaborn as sns
-import pandas as pd
-from keras.api.models import load_model
-import numpy as np
 
 from main_model_train.ALL.Xception import CSV_PATH, CLASS_NAMES, EnhancedEyeGenerator, BATCH_SIZE, MacroF1, MacroRecall, \
     weighted_bce, SEBlock
@@ -142,7 +143,6 @@ def evaluate_model(model_path, test_df):
     plt.savefig('result/confusion_matrices.png', dpi=300, bbox_inches='tight')
     plt.close()
 
-    # 保存指标到Excel
     df_metrics = pd.DataFrame(metrics)
     df_metrics = df_metrics.round(3)
 

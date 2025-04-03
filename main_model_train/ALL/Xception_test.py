@@ -1,4 +1,5 @@
 import os
+from itertools import cycle
 
 import cv2
 import keras
@@ -6,16 +7,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from sklearn.metrics import roc_curve, auc, classification_report, multilabel_confusion_matrix
-from itertools import cycle
-
 from keras.api.utils import Sequence
+from sklearn.metrics import roc_curve, auc, classification_report, multilabel_confusion_matrix
 
 from config import ROOT_DIR
 from main_model_train.ALL.Xception import IMAGE_SIZE, CLASS_NAMES, BATCH_SIZE, MacroF1, MacroRecall
 
 TEST_CSV_PATH = ROOT_DIR / "dataset/combined_dataset.csv"
-MODEL_PATH = "fina_30epoch_0.76acc_model.h5"
+MODEL_PATH = "models/fina_30epoch_0.76acc_model.h5"
 
 
 # 在原有测试代码基础上添加以下可视化函数
@@ -95,7 +94,7 @@ class TestGenerator(Sequence):
         return int(np.ceil(len(self.df) / self.batch_size))
 
     def __getitem__(self, index):
-        batch_indices = self.indices[index*self.batch_size : (index+1)*self.batch_size]
+        batch_indices = self.indices[index * self.batch_size: (index + 1) * self.batch_size]
         X = np.empty((len(batch_indices), IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.float32)
         y = np.empty((len(batch_indices), len(CLASS_NAMES)), dtype=np.float32)
 
@@ -148,10 +147,10 @@ class TestGenerator(Sequence):
     def on_epoch_end(self):
         np.random.shuffle(self.indices)
 
+
 # 加载测试数据时只需要验证单个图像存在
 def load_test_data():
     test_df = pd.read_csv(TEST_CSV_PATH)
-
 
     valid_rows = []
     for idx, row in test_df.iterrows():
@@ -159,7 +158,7 @@ def load_test_data():
         if os.path.exists(row['image_name']):
             valid_rows.append(row)
 
-    print(f"Filtered {len(test_df)-len(valid_rows)} invalid samples")
+    print(f"Filtered {len(test_df) - len(valid_rows)} invalid samples")
     return pd.DataFrame(valid_rows)
 
 

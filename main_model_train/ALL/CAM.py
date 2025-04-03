@@ -110,122 +110,177 @@ class LayerCAM:
             outputs=[model.output] + [layer.output for layer in self.target_layers]
         )
 
-    def compute_heatmap(self, image, class_idx=None, eps=1e-8):
+    def compute_heatmaps(self, image, threshold=0.5, eps=1e-8):
         """
-        计算LayerCAM热力图
+        计算所有概率大于threshold的类别的LayerCAM热力图
 
         参数:
             image: 输入图像(预处理后的)
-            class_idx: 目标类别索引，None表示预测类别
+            threshold: 概率阈值
             eps: 防止除零的小常数
 
         返回:
-            各层的热力图字典{layer_name: heatmap}
+            字典: {
+                'predictions': 预测概率数组,
+                'heatmaps': {
+                    class_name: {
+                        layer_name: heatmap
+                    }
+                }
+            }
         """
         # 转换为batch形式
         img_tensor = tf.convert_to_tensor(image[np.newaxis, ...])
 
-        with tf.GradientTape() as tape:
+        with tf.GradientTape(persistent=True) as tape:
             outputs = self.grad_model(img_tensor)
             preds = outputs[0]
             layer_outputs = outputs[1:]
 
-            if class_idx is None:
-                class_idx = tf.argmax(preds[0])
+            # 获取所有概率大于阈值的类别
+            active_classes = tf.where(preds[0] > threshold)
 
-            # 获取目标类别的分数
-            class_score = preds[:, class_idx]
+            # 存储结果
+            results = {
+                'predictions': preds[0].numpy(),
+                'heatmaps': {}
+            }
 
-        # 计算梯度
-        grads = tape.gradient(class_score, layer_outputs)
+            # 为每个激活的类别计算热力图
+            for class_idx in active_classes:
+                class_idx = class_idx.numpy()[0]
+                class_name = CLASS_NAMES[class_idx]
+                results['heatmaps'][class_name] = {}
 
-        heatmaps = {}
-        for i, (layer_name, layer_output, grad) in enumerate(
-                zip([layer.name for layer in self.target_layers], layer_outputs, grads)):
-            # LayerCAM核心计算
-            weights = tf.nn.relu(grad)  # 使用ReLU过滤负梯度
-            weighted_output = weights * layer_output
+                # 计算该类别的梯度
+                class_score = preds[:, class_idx]
+                grads = tape.gradient(class_score, layer_outputs)
 
-            # 沿通道维度求和
-            heatmap = tf.reduce_sum(weighted_output, axis=-1)
+                # 为每个目标层计算热力图
+                for i, (layer_name, layer_output, grad) in enumerate(
+                        zip([layer.name for layer in self.target_layers], layer_outputs, grads)):
+                    # LayerCAM核心计算
+                    weights = tf.nn.relu(grad)  # 使用ReLU过滤负梯度
+                    weighted_output = weights * layer_output
 
-            # 归一化处理
-            heatmap = tf.squeeze(heatmap).numpy()
-            heatmap = np.maximum(heatmap, 0)  # ReLU
-            heatmap = (heatmap - np.min(heatmap)) / (np.max(heatmap) - np.min(heatmap) + eps)
+                    # 沿通道维度求和
+                    heatmap = tf.reduce_sum(weighted_output, axis=-1)
 
-            # 调整大小到输入图像尺寸
-            heatmap = cv2.resize(heatmap, (image.shape[1], image.shape[0]))
-            heatmap = np.uint8(255 * heatmap)
+                    # 归一化处理
+                    heatmap = tf.squeeze(heatmap).numpy()
+                    heatmap = np.maximum(heatmap, 0)  # ReLU
+                    heatmap = (heatmap - np.min(heatmap)) / (np.max(heatmap) - np.min(heatmap) + eps)
 
-            heatmaps[layer_name] = heatmap
+                    # 调整大小到输入图像尺寸
+                    heatmap = cv2.resize(heatmap, (image.shape[1], image.shape[0]))
+                    heatmap = np.uint8(255 * heatmap)
 
-        return heatmaps, class_idx.numpy()
+                    results['heatmaps'][class_name][layer_name] = heatmap
+
+            return results
 
 
-def visualize_heatmap(model_path, image_id, output_dir):
+def visualize_heatmaps(model_path, image_id, output_dir):
     """
-    可视化热力图的主函数
+    可视化所有激活类别的热力图
 
     参数:
         model_path: 模型文件路径
-        image_path: 输入图像路径
+        image_id: 图像ID(不带左右后缀)
         output_dir: 输出目录
     """
+
     # 加载模型
     model = load_model(model_path, custom_objects={
-        'SEBlock': SEBlock,  # 从您的训练代码中导入SEBlock
+        'SEBlock': SEBlock,
         'weighted_bce': weighted_bce,
         'MacroRecall': lambda: MacroRecall(len(CLASS_NAMES)),
         'MacroF1': lambda: MacroF1(len(CLASS_NAMES)),
     })
 
-    # 定义要可视化的目标层(根据您的模型结构调整)
+    # 定义要可视化的目标层(根据Xception架构调整)
     target_layers = [
         'block1_conv1',  # 浅层特征
-        'block1_conv2',
+        'block3_sepconv2_act',
         'block4_sepconv2_act',  # 中层特征
         'block8_sepconv2_act',  # 中深层特征
-        'block14_sepconv2_act',  # 深层特征
-        'se_block'  # 您添加的SE注意力层
+        'block12_sepconv3_act',  # 深层特征
     ]
 
     # 初始化LayerCAM
     layercam = LayerCAM(model, target_layers)
 
     # 加载并预处理图像(与训练时相同)
-    img_left = cv2.imread(ROOT_DIR / f"dataset/Archive/preprocessed_images/{image_id}_left.jpg")
-    img_right = cv2.imread(ROOT_DIR / f"dataset/Archive/preprocessed_images/{image_id}_right.jpg")
+    img_left = cv2.imread(str(ROOT_DIR / f"dataset/Archive/preprocessed_images/{image_id}_left.jpg"))
+    img_right = cv2.imread(str(ROOT_DIR / f"dataset/Archive/preprocessed_images/{image_id}_right.jpg"))
     img = np.concatenate([img_left, img_right], axis=1)
-    img = cv2.resize(img, (299, 299))
-    img = img / 255.0
+    img = cv2.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
+    img_preprocessed = img / 255.0
 
     # 计算热力图
-    heatmaps, pred_class = layercam.compute_heatmap(img)
-    img = (img * 255).astype(np.uint8)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    # 可视化结果
-    plt.figure(figsize=(20, 15))
-    plt.subplot(1, len(heatmaps) + 1, 1)
-    plt.imshow(img)
-    plt.title('Original Image')
-    plt.axis('off')
+    results = layercam.compute_heatmaps(img_preprocessed)
 
-    for i, (layer_name, heatmap) in enumerate(heatmaps.items()):
-        plt.subplot(1, len(heatmaps) + 1, i + 2)
-        plt.imshow(img)
-        plt.imshow(heatmap, cmap='jet', alpha=0.5)
-        plt.title(layer_name)
+    # 准备原始图像用于可视化
+    img_display = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+    # 为每个激活的类别创建可视化
+    for class_name, layer_heatmaps in results['heatmaps'].items():
+        # 创建新的figure
+        plt.figure(figsize=(20, 15))
+
+        # 显示原始图像和预测概率
+        plt.subplot(1, len(target_layers) + 1, 1)
+        plt.imshow(img_display)
+        plt.title(f'Original Image\n{class_name}: {results["predictions"][CLASS_NAMES.index(class_name)]:.3f}')
         plt.axis('off')
 
-    plt.suptitle(f'LayerCAM Visualization (Predicted Class: {pred_class})')
-    plt.tight_layout()
-    plt.savefig(f'{output_dir}/layercam_vis.png')
-    plt.close()
+        # 显示各层热力图
+        for i, (layer_name, heatmap) in enumerate(layer_heatmaps.items()):
+            plt.subplot(1, len(target_layers) + 1, i + 2)
+            plt.imshow(img_display)
+            plt.imshow(heatmap, cmap='jet', alpha=0.5)
+            plt.title(layer_name)
+            plt.axis('off')
+
+        # 保存单独的文件
+        plt.suptitle(f'LayerCAM Visualization - Class {class_name}')
+        plt.tight_layout()
+        plt.savefig(f'{output_dir}/{image_id}_{class_name}_heatmaps.png')
+        plt.close()
+
+    # 创建一个综合所有类别的可视化
+    if results['heatmaps']:
+        num_classes = len(results['heatmaps'])
+        plt.figure(figsize=(20, 5 * num_classes))
+
+        for row_idx, (class_name, layer_heatmaps) in enumerate(results['heatmaps'].items()):
+            # 原始图像
+            plt.subplot(num_classes, len(target_layers) + 1, row_idx * (len(target_layers) + 1) + 1)
+            plt.imshow(img_display)
+            plt.title(f'{class_name}: {results["predictions"][CLASS_NAMES.index(class_name)]:.5f}')
+            plt.axis('off')
+
+            # 各层热力图
+            for i, (layer_name, heatmap) in enumerate(layer_heatmaps.items()):
+                plt.subplot(num_classes, len(target_layers) + 1, row_idx * (len(target_layers) + 1) + i + 2)
+                plt.imshow(img_display)
+                plt.imshow(heatmap, cmap='jet', alpha=0.5)
+                plt.title(layer_name)
+                plt.axis('off')
+
+        plt.suptitle(f'LayerCAM Visualization for Image {image_id}')
+        plt.tight_layout()
+        plt.savefig(f'{output_dir}/{image_id}_combined_heatmaps.png')
+        plt.close()
+
+    # 打印预测结果
+    print("Prediction results:")
+    for i, prob in enumerate(results['predictions']):
+        print(f"{CLASS_NAMES[i]}: {prob:.4f}{' *' if prob > 0.5 else ''}")
 
 
 if __name__ == "__main__":
     model_path = MODEL_PATH
-    image_id = "43"
+    image_id = "45"  # 示例图像ID
     output_dir = "heatmaps"
-    visualize_heatmap(model_path, image_id, output_dir)
+    visualize_heatmaps(model_path, image_id, output_dir)

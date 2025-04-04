@@ -281,6 +281,6 @@ def visualize_heatmaps(model_path, image_id, output_dir):
 
 if __name__ == "__main__":
     model_path = MODEL_PATH
-    image_id = "45"  # 示例图像ID
+    image_id = "43"  # 示例图像ID
     output_dir = "heatmaps"
     visualize_heatmaps(model_path, image_id, output_dir)
